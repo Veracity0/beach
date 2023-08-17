@@ -163,6 +163,9 @@ void print_help()
     // print_html(spaces + "<b>twinkle</b>: comb all twinkly tiles" );
     // print_html(spaces + "<b>known</b>: comb only known rare tiles" );
     // print_html(spaces + "(the above will comb rough sand if there are no better candiates)" );
+    print_html("");
+    print_html(spaces + "<b>help</b>: print this message" );
+    print_html(spaces + "<b>data</b>: load, analyze, and print tile data, and then exit" );
 }
 
 // Mode for selecting sections of the beach to visit
