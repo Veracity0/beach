@@ -1,3 +1,6 @@
 [
-  { "minute": 355, "row": 2 , "column": 5 }
+  { "minute": 355, "row": 2 , "column": 5 },
+  { "minute": 4913, "row": 4 , "column": 9 },
+  { "minute": 6632, "row": 9 , "column": 5 },
+  { "minute": 6696, "row": 7 , "column": 5 }
 ]

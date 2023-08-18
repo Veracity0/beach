@@ -208,7 +208,7 @@ static string PATH_SEPARATOR = "/";
 
 string beach_file(string filename)
 {
-    return BEACH_DIRECTORY + PATH_SEPARATOR + filename;
+    return "data" + PATH_SEPARATOR + BEACH_DIRECTORY + PATH_SEPARATOR + filename;
 }
 
 coords_list load_tiles(string filename)
