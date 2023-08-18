@@ -107,7 +107,7 @@ void print_help()
     print_html(spaces + "<b>NUMBER</b>: comb beach using free wanders and specified number of turns" );
     print_html("");
     print_html(spaces + "<b>random</b>: visit random sections of the beach" );
-    // print_html(spaces + "<b>rare</b>: visit sections of the beach with known rare tiles" );
+    print_html(spaces + "<b>rare</b>: visit sections of the beach with known rare tiles" );
     print_html(spaces + "<b>spade</b>: methodically visit successive sections of the beach" );
     print_html(spaces + "<b>minutes=NUMBER</b>: visit specific section of the beach" );
     // print_html("");
