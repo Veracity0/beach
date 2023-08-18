@@ -51,11 +51,10 @@ typedef boolean [string] string_set;
 
 // Square picking strategy:
 //
-// random	pick randomly from all squares containing the highest priority
-// twinkle	comb all patches of rough sand with a twinkle within a beach
-//		before moving to another section
+// first	pick only the single best patch to comb on a beach.
+// twinkle	comb all twinkles on a beach before moving on.
 
-string pick_strategy = define_property( "VBC.PickStrategy", "string", "random" );
+string pick_strategy = define_property( "VBC.PickStrategy", "string", "first" );
 
 // ***************************
 //        Validatation       *
@@ -72,7 +71,7 @@ static string_set priority_options = $strings[
 ];
 
 static string_set strategy_options = $strings[
-    random,
+    first,
     twinkle
 ];
 
@@ -81,6 +80,11 @@ void validate_configuration()
     boolean valid = true;
 
     print( "Validating configuration." );
+
+    // Migrate settings.
+    if (pick_strategy == "random") {
+	set_property("VBC.PickStrategy", "first");
+    }
 
     if ( !( strategy_options contains pick_strategy ) ) {
 	print( "VBC.PickStrategy: '" + pick_strategy + "' is invalid.", "red" );
@@ -174,7 +178,7 @@ void parse_parameters(string... parameters)
 	    continue;
 	case "rare":
 	    mode = "rare";
-	    pick_strategy = "twinkle";
+	    pick_strategy = "first";
 	    continue;
 	case "spade":
 	    mode = "spade";
@@ -509,6 +513,82 @@ void populate_tile_maps(boolean verbose)
 //          Strategies       *
 // ***************************
 
+// If we are in "rare" mode, we want to look for rares.
+// We need more data structures to enable that.
+
+coords_list available_rare_tiles;
+
+coords_list flatten_coords_map(coords_map map)
+{
+    coords_list flat_list;
+    foreach beach, list in map {
+	foreach tile in list {
+	    flat_list[count(flat_list)] = tile;
+	}
+    }
+    return flat_list;
+}
+
+void prepare_rare_tiles()
+{
+    // The rare_tiles_map contains tiles from both rare_tiles and
+    // rare_tiles_new. Therefore, flatten the map to get all of the
+    // tiles in order.
+
+    available_rare_tiles = rare_tiles_map.flatten_coords_map();
+
+    // The tiles are in coordinates order, but are indexed like an
+    // array, not by coordinates key. That makes it easy to randomly
+    // index into, or sequentially iterate through.
+
+    // combo deterministcally (using player id as random seed) shuffles
+    // such a list and iterates through it, picking up each day from
+    // wherever it left off the previous day.
+    //
+    // That means that over the course of however many days, you will
+    // visit every tile exactly once.
+    //
+    // I am not convinced that is all that helpful; the tiles do
+    // regenerate over time. It's not every rollover, but we don't know
+    // how quickly it happens.
+
+    // My initial take is that if we randomly pick a tile from the list -
+    // and recreate the list every time we comb one - that might suffice.
+}
+
+void remove_rare_tile(coords c)
+{
+    // If we have just picked a rare tile, it is now combed sand.
+    // Remove it from consideration.
+    int  minute = c.minute;
+    coords_list rares = rare_tiles_map[minute];
+
+    // This might be a new rare tile.
+    if (rares.count() == 0) {
+	return;
+    }
+
+    // It is a known beach, at least.
+    rares.remove_tile(c);
+    if (rares.count() == 0) {
+	remove rare_tiles_map[minute];
+    }
+    available_rare_tiles = rare_tiles_map.flatten_coords_map();
+}
+
+int next_rare_beach()
+{
+    int size = available_rare_tiles.count();
+    if (size > 0) {
+	int index = (size == 1) ? 0 : random(size);
+	coords tile = available_rare_tiles[index];
+	print("Looking for rare tile at " + tile);
+	return tile.minute;
+    }
+    // This shouldn't be possible
+    return 0;
+}
+
 static coords IMPOSSIBLE = new coords(beach, 10, 0);
 
 coords pick_coords_to_comb( int beach, sorted_beach_map map )
@@ -542,7 +622,6 @@ coords pick_coords_to_comb( int beach, sorted_beach_map map )
     coords_list whales = map["W"];
     if (count(whales) > 0) {
 	foreach key, c in whales {
-	    remove whales[key];
 	    return c;
 	}
     }
@@ -679,6 +758,11 @@ void beach_completed(coords c)
 	completed = true;
 	return;
     }
+    // If we are looking for rares and none are left, we're done
+    if (mode == "rares" && available_rare_tiles.count() == 0) {
+	completed = true;
+	return;
+    }
     // If we are spading multiple squares, move to next square
     if (mode == "spade") {
 	spade_last_minutes = ( spade_last_minutes + 1 ) % 10000;
@@ -707,7 +791,7 @@ buffer comb_beach( buffer page )
 	string filename = my_name() + "_beachcombings_" + now_to_string( "YYYYMMddHHmmssSSS" ) + ".txt";
 	print( "Saving page HTML to " + filename, "red" );
 	beachcombings[ count( beachcombings ) ] = filename;
-	buffer_to_file( page, beach_file(filename) );
+	page.buffer_to_file(beach_file(filename));
     }
 
     // We depend on KoLmafia to parse the page into properties
@@ -761,7 +845,7 @@ buffer comb_beach( buffer page )
 
     // We don't intentionally farm more than once in a beach segment
     // with no unknown twinkles.
-    if (count(unknowns) == 0) {
+    if (pick_strategy == "first" || count(unknowns) == 0) {
 	beach_completed(c);
     }
 
@@ -799,8 +883,8 @@ buffer comb_beach( buffer page )
 	tile_type = "rare";
     }
 
-    if ( special ) {
-	save_page_html( page );
+    if (tile_type == "rare") {
+	remove_rare_tile(c);
     }
 
     int meat = page.extract_meat();
@@ -822,6 +906,10 @@ buffer comb_beach( buffer page )
     combed_meat += meat;
     foreach it, count in items {
 	combed_items[ it ] += count;
+    }
+
+    if ( special ) {
+	save_page_html( page );
     }
 
     return page;
@@ -856,16 +944,17 @@ buffer comb_next_beach()
     //  "beach"		Go to specified beach we are spading
     //
     // Based on "pick_strategy"
-    //  "random"	Visit at most one twinkle
+    //  "first"		Visit at most one tile
     //  "twinkle"	Visit all twinkles
 
     buffer page;
     switch (mode) {
     case "rare":
-	// Until this is implemented, treat it as "random"
+	page = comb_specific_beach( next_rare_beach() );
+	break;
     case "random":
-	// We'll go to random beachs, but will visit all twinkles
-	if ( pick_strategy == "random" || current_beach == 0 ) {
+	// We'll go to random beachs, but might visit all twinkles
+	if ( pick_strategy == "first" || current_beach == 0 ) {
 	    page = comb_random_beach();
 	} else {
 	    page = comb_specific_beach( current_beach );
@@ -1055,7 +1144,12 @@ void main(string... parameters )
     if (mode == "data") {
 	exit;
     }
-  
+
+    // If the user wants to comb rare tiles, set up helpful data structures
+    if (mode == "rare") {
+	prepare_rare_tiles();
+    }
+
     try {
 	// Use all free combs
 	beach_comb_free_only();
