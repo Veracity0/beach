@@ -1,3 +1,5 @@
+import <BeachComberJSON.ash>;
+
 // ***************************
 //        Coordinates        *
 // ***************************
@@ -149,29 +151,10 @@ string coords_to_json( coords coords )
 
 coords json_to_coords( string json )
 {
-    matcher omatcher = create_matcher("\\{\\s*(.+)\\s*\\}", json);
-    if (!omatcher.find()) {
-	return new coords(0, 0, 0);
-    }
-    matcher fmatcher = create_matcher("\\\"(.+?)\\\"\\s*?:\\s*\\\"?(\\d+)\\\"?,?", omatcher.group(1));
-    int minute;
-    int row;
-    int column;
-    while (fmatcher.find()) {
-	string name = fmatcher.group(1);
-	int value = fmatcher.group(2).to_int();
-	switch (name) {
-	case "minute":
-	    minute = value;
-	    break;
-	case "row":
-	    row = value;
-	    break;
-	case "column":
-	    column = value;
-	    break;
-	}
-    }
+    json_object object = parse_json_object(json);
+    int minute = object.get_json_int("minute");
+    int row = object.get_json_int("row");
+    int column = object.get_json_int("column");
     return new coords(minute, row, column);
 }
 
@@ -204,13 +187,9 @@ buffer coords_list_to_json( coords_list list )
 coords_list json_to_coords_list( buffer json )
 {
     coords_list result;
-    matcher amatcher = create_matcher("\\[(.+)\\]", json);
-    if (!amatcher.find()) {
-	return result;
-    }
-    matcher omatcher = create_matcher("\\{(.+?)\\}", amatcher.group(1));
-    while (omatcher.find()) {
-	coords coords = json_to_coords(omatcher.group(0));
+    json_array array = parse_json_array(json);
+    foreach n, value in array {
+	coords coords = json_to_coords(value);
 	int key = coords.to_key();
 	result[key] = coords;
     }
@@ -276,7 +255,7 @@ boolean load_tile_data(boolean verbose)
     uncommon_tiles = load_tiles("tiles.uncommon.json");
     uncommon_tiles_new = load_tiles("tiles.uncommon.new.json");
 
-    spade_last_minutes = file_to_buffer("beach/spade.minutes.txt").to_string().to_int();
+    spade_last_minutes = file_to_buffer(beach_file("spade.minutes.txt")).to_string().to_int();
 
     if (verbose) {
 	print("Unvisited twinkle tiles: " + count(twinkle_tiles));
@@ -302,5 +281,5 @@ void save_tile_data()
 
     buffer spade_minutes;
     spade_minutes.append(spade_last_minutes);
-    buffer_to_file(spade_minutes, "beach/spade.minutes.txt");
+    buffer_to_file(spade_minutes, beach_file("spade.minutes.txt"));
 }
