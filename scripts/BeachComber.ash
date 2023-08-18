@@ -935,6 +935,58 @@ string pnum( int n )
 }
 
 // ***************************
+//           Results         *
+// ***************************
+
+record results
+{
+    int common;		// Common tile visited
+    int uncommon;	// Uncommon tiles visited
+    int rare;		// Rare tiles visited
+    int meat;		// Meat collected
+    int[item] items;	// Items looted
+};
+
+results read_results()
+{
+    string filename = beach_file("results.json");
+    buffer buf = file_to_buffer(filename);
+    json_object object = parse_json_object(buf);
+
+    results data;
+    data.common = object.get_json_int("common");
+    data.uncommon = object.get_json_int("uncommon");
+    data.rare = object.get_json_int("rare");
+    data.meat = object.get_json_int("meat");
+    json_object items = object.get_json_object("items");
+    foreach field, count in items {
+	data.items[field.to_item()] = count.to_int();
+    }
+    return data;
+}
+
+void write_results(results data)
+{
+    buffer buf;
+    buf.append(data.to_json());
+    string filename = beach_file("results.json");
+    buffer_to_file(buf, filename);
+}
+
+void tally_loot()
+{
+    results data = read_results();
+    data.common += combed_rarities["common"];
+    data.uncommon += combed_rarities["uncommon"];
+    data.rare += combed_rarities["rare"];
+    data.meat += combed_meat;
+    foreach it, n in combed_items {
+	data.items[it] += n;
+    }
+    write_results(data);
+}
+
+// ***************************
 //       Master Control      *
 // ***************************
 
@@ -1028,14 +1080,14 @@ void main(string... parameters )
 	}
 
 	print();
-	print( "Items combed:" );
-	foreach it, count in combed_items {
-	    print( it + " (" + count + ")" );
-	}
-
 	if ( combed_meat > 0 ) {
 	    print();
 	    print( "Meat combed:" + pnum( combed_meat ) );
+	}
+
+	print( "Items combed:" );
+	foreach it, count in combed_items {
+	    print( it + " (" + count + ")" );
 	}
 
 	if ( count( beachcombings ) > 0 ) {
@@ -1045,5 +1097,7 @@ void main(string... parameters )
 		print( filename );
 	    }
 	}
+
+	tally_loot();
     }
 }
