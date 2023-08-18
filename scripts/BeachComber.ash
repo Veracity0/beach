@@ -49,26 +49,6 @@ typedef boolean [string] string_set;
 // All properties used directly by this script start with "VBC."
 //-------------------------------------------------------------------------
 
-// How to prioritize beach squares to comb
-//
-// W	a beached whale
-// ?	an unclassifiable square
-// C	a sand castle
-// r	rough sand
-// t	rough sand with a twinkle
-// c	combed sand
-// H	a beach head
-//
-// There is a fixed set of 11 beach heads, and if you want to visit, you
-// can do that manually, so they are not prioritized by default. If you
-// want a random buff rather than items, add them.
-//
-// We do not expect any unidentifiable square. If KoLmafia finds a
-// square it cannot classify, it will log it in the gCLI and session log
-// and return a "?". This script assumes such squares are worth visiting.
-
-string_list priorities = define_property( "VBC.Priorities", "string", "W,?,t,r,c", "list" ).to_string_list( "," );
-
 // Square picking strategy:
 //
 // random	pick randomly from all squares containing the highest priority
@@ -101,39 +81,6 @@ void validate_configuration()
     boolean valid = true;
 
     print( "Validating configuration." );
-
-    boolean tseen = false;
-    boolean rseen = false;
-    boolean cseen = false;
-
-    foreach index, priority in priorities {
-	if ( !( priority_options contains priority ) ) {
-	    print( "VBC.Priorities: '" + priority + "' is not a valid square type.", "red" );
-	    valid = false;
-	} else if ( priority == "r" ) {
-	    rseen = true;
-	} else if ( priority == "c" ) {
-	    cseen = true;
-	} else if ( priority == "t" ) {
-	    tseen = true;
-	}
-    }
-
-    // Always put 't', 'r' and 'c' at the end if otherwise not specified
-    if ( valid ) {
-	if ( !tseen ) {
-	    print( "VBC.Priorities: adding 't'." );
-	    priorities[ count( priorities ) ] = "t";
-	}
-	if ( !rseen ) {
-	    print( "VBC.Priorities: adding 'r'." );
-	    priorities[ count( priorities ) ] = "r";
-	}
-	if ( !cseen ) {
-	    print( "VBC.Priorities: adding 'c'." );
-	    priorities[ count( priorities ) ] = "c";
-	}
-    }
 
     if ( !( strategy_options contains pick_strategy ) ) {
 	print( "VBC.PickStrategy: '" + pick_strategy + "' is invalid.", "red" );
@@ -412,20 +359,6 @@ coords_list extract_twinkles(sorted_beach_map map) {
     return twinkles;
 }
 
-void save_new_twinkles(coords_list twinkles) {
-    foreach key, c in twinkles {
-	if (rare_tiles contains key ||
-	    rare_tiles_new contains key ||
-	    uncommon_tiles contains key ||
-	    uncommon_tiles_new contains key) {
-	    // We've seen this twinkle before
-	    continue;
-	}
-	// Previously unobserved.
-	twinkle_tiles.add_tile(c);
-    }
-}
-
 void save_visited_tile(coords tile, string tile_type) {
     int key = tile.to_key();
     switch (tile_type) {
@@ -576,7 +509,7 @@ void populate_tile_maps(boolean verbose)
 //          Strategies       *
 // ***************************
 
-// Pick randomly from all squares of the highest priority
+static coords IMPOSSIBLE = new coords(beach, 10, 0);
 
 coords pick_coords_to_comb( int beach, sorted_beach_map map )
 {
@@ -590,7 +523,7 @@ coords pick_coords_to_comb( int beach, sorted_beach_map map )
 	    }
 	}
 	// This should not be possible
-	return new coords(beach, 10, 0);
+	return IMPOSSIBLE;
     }
 
     coords pick_random(coords_list clist) {
@@ -598,26 +531,82 @@ coords pick_coords_to_comb( int beach, sorted_beach_map map )
 	return pick_index(clist, range == 1 ? 0 : random( range ));
     }
 
-    coords pick_rare(coords_list clist) {
-	foreach key, c in clist {
-	    if (rare_tiles contains key ||
-		rare_tiles_new contains key) {
+    // 1) a whale
+    // 2) a known rare tile
+    // 3) a hitherto unknown twinkle
+    // 4) a known uncommon tile
+    // 5) rough sand
+    // 6) combed sand
+
+    // 1) If there is a whale, get it.
+    coords_list whales = map["W"];
+    if (count(whales) > 0) {
+	foreach key, c in whales {
+	    remove whales[key];
+	    return c;
+	}
+    }
+
+    // Get the known twinkles from this beach segment
+    coords_list known_rares = rare_tiles_map[beach];
+    coords_list known_uncommons = uncommon_tiles_map[beach];
+
+    // Look through currently twinkling tiles
+    coords_list twinkles = map["t"];
+    if (count(twinkles) > 0) {
+	// 2) Look for a rare
+	foreach key, c in known_rares {
+	    if (twinkles contains key) {
 		return c;
 	    }
 	}
-	// No known rare tile. Pick a random one.
-	return pick_random(clist);
-    }
-
-    foreach index, choice in priorities {
-	coords_list clist = map[choice];
-	if ( count(clist) > 0 ) {
-	    return pick_rare( clist );
+	coords candidate;
+	// Remove known uncommons
+	foreach key, c in known_uncommons {
+	    candidate = c;
+	    remove twinkles[key];
+	}
+	// 3) If there are remaining twinkles, they are new
+	// Return the first one found
+	foreach key, c in twinkles {
+	    return c;
+	}
+	// 4) If there is a known uncommon, take it
+	if (candidate.minute > 0) {
+	    return candidate;
 	}
     }
 
-    // This should not be possible
-    return new coords(beach, 10, 0);
+    // There were no twinkles - or the character can't see them.
+    // If the latter, we may know of rare and/or uncommon tiles.
+    coords_list rough = map["r"];
+    if (count(rough) > 0) {
+	// 2) Look for a rare
+	foreach key, c in known_rares {
+	    if (rough contains key) {
+		return c;
+	    }
+	}
+	// 4) Look for an uncommon
+	foreach key, c in known_uncommons {
+	    if (rough contains key) {
+		return c;
+	    }
+	}
+	// 5) Comb the first patch of rough sand
+	return pick_index(rough, 0);
+    }
+
+    // No twinkles or rough sand. Everything is combed?
+    // Look at combed sand and take the first we find.
+    coords_list combed = map["c"];
+    if (count(combed) > 0) {
+	// 6) Comb the first patch of combed sand
+	return pick_index(combed, 0);
+    }
+
+    // Impossible
+    return IMPOSSIBLE;
 }
 
 // ***************************
@@ -665,6 +654,20 @@ beach_layout modify_square( beach_layout layout, coords c, string val )
 }
 
 int current_beach = 0;
+
+coords_list unknown_twinkles(int beach, coords_list twinkles)
+{
+    coords_list known_rares = rare_tiles_map[beach];
+    coords_list known_uncommons = uncommon_tiles_map[beach];
+    coords_list unknowns;
+    foreach key, c in twinkles {
+	if (known_rares contains key || known_uncommons contains key) {
+	    continue;
+	}
+	unknowns.add_tile(c);
+    }
+    return unknowns;
+}
 
 void beach_completed(coords c)
 {
@@ -717,7 +720,8 @@ buffer comb_beach( buffer page )
     coords_list twinkles = extract_twinkles(map);
 
     // Save previously unvisited twinkles
-    save_new_twinkles(twinkles);
+    coords_list unknowns = unknown_twinkles( beach, twinkles );
+    twinkle_tiles.add_tiles(unknowns);
 
     coords c = pick_coords_to_comb( beach, map );
     string type = code_to_type[ square_at( layout, c ) ];
@@ -753,11 +757,11 @@ buffer comb_beach( buffer page )
     // Remove the newly combed tile from previously unknown twinkles
     int key = c.to_key();
     remove twinkle_tiles[key];
-    remove twinkles[key];
+    remove unknowns[key];
 
     // We don't intentionally farm more than once in a beach segment
-    // with no twinkles.
-    if (count(twinkles) == 0) {
+    // with no unknown twinkles.
+    if (count(unknowns) == 0) {
 	beach_completed(c);
     }
 
