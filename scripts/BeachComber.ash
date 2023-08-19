@@ -812,7 +812,7 @@ buffer comb_beach( buffer page )
 	    "_" + (c.row) +
 	    "_" + (c.column + 1) +
 	    "_" + now_to_string( "YYYYMMddHHmmssSSS" ) +
-	    ".txt";
+	    ".html";
 	print( "Saving page HTML to " + filename, "red" );
 	beachcombings[ count( beachcombings ) ] = filename;
 	page.buffer_to_file(beach_file(filename));
