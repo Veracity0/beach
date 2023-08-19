@@ -107,13 +107,13 @@ void print_help()
     print_html(spaces + "<b>NUMBER</b>: comb beach using free wanders and specified number of turns" );
     print_html("");
     print_html(spaces + "<b>random</b>: visit random sections of the beach" );
-    print_html(spaces + "<b>rare</b>: visit sections of the beach with known rare tiles" );
+    print_html(spaces + "<b>rare</b>: visit only sections of the beach with known rare tiles" );
     print_html(spaces + "<b>spade</b>: methodically visit successive sections of the beach" );
     print_html(spaces + "<b>minutes=NUMBER</b>: visit specific section of the beach" );
-    // print_html("");
-    // print_html(spaces + "<b>twinkle</b>: comb all twinkly tiles" );
-    // print_html(spaces + "<b>known</b>: comb only known rare tiles" );
-    // print_html(spaces + "(the above will comb rough sand if there are no better candiates)" );
+    print_html("");
+    print_html(spaces + "<b>twinkle</b>: comb rare and unknown twinkly tiles" );
+    print_html(spaces + "<b>first</b>: comb only the best tile" );
+    print_html(spaces + "(the above will comb rough sand if there are no better candidates)" );
     print_html("");
     print_html(spaces + "<b>help</b>: print this message" );
     print_html(spaces + "<b>data</b>: load, analyze, and print tile data, and then exit" );
@@ -183,6 +183,13 @@ void parse_parameters(string... parameters)
 	case "spade":
 	    mode = "spade";
 	    pick_strategy = "twinkle";
+	    continue;
+	case "twinkle":
+	case "twinkles":
+	    pick_strategy = "twinkle";
+	    continue;
+	case "first":
+	    pick_strategy = "first";
 	    continue;
 	}
 
@@ -513,6 +520,13 @@ void populate_tile_maps(boolean verbose)
 //          Strategies       *
 // ***************************
 
+// The last beach we visited.
+//
+// After combing it, if there are no more twinkles, we'll zero it.
+// Therefore, if it is non-zero, it still has twinkles.
+
+int current_beach = 0;
+
 // If we are in "rare" mode, we want to look for rares.
 // We need more data structures to enable that.
 
@@ -578,6 +592,12 @@ void remove_rare_tile(coords c)
 
 int next_rare_beach()
 {
+    // If we just combed a beach and it still has twinkles,
+    // perhaps we want to look at them
+    if (current_beach != 0 && pick_strategy == "twinkle") {
+	return current_beach;
+    }
+
     int size = available_rare_tiles.count();
     if (size > 0) {
 	int index = (size == 1) ? 0 : random(size);
@@ -732,15 +752,13 @@ beach_layout modify_square( beach_layout layout, coords c, string val )
     return layout;
 }
 
-int current_beach = 0;
-
 coords_list unknown_twinkles(int beach, coords_list twinkles)
 {
-    coords_list known_rares = rare_tiles_map[beach];
+    // Only skip known uncommons; we want to visit known rares.
     coords_list known_uncommons = uncommon_tiles_map[beach];
     coords_list unknowns;
     foreach key, c in twinkles {
-	if (known_rares contains key || known_uncommons contains key) {
+	if (known_uncommons contains key) {
 	    continue;
 	}
 	unknowns.add_tile(c);
@@ -1102,11 +1120,6 @@ void beach_comb_turns_only( int turns )
 
 void main(string... parameters )
 {
-    if ( available_amount( beach_comb ) == 0 &&
-	 available_amount( driftwood_beach_comb ) == 0) {
-        abort( "You don't have a Beach Comb or a driftwood beach comb!" );
-    }
-
     // Parameters are optional. Depending on how the script is invoked,
     // there may be a single string with space-separated keywords, or
     // multiple strings. Whichever, turn into an array of keywords.
@@ -1115,6 +1128,20 @@ void main(string... parameters )
     // Parse parameters, if any. Do it before validating the
     // configuration, since parameters can override properties.
     parse_parameters(params);
+
+    // If user only wants to see the data, load the data verbosely
+    // (which will print info) and then exit.
+    if (mode == "data") {
+	load_tile_data(true);
+	print();
+	populate_tile_maps(true);
+	exit;
+    }
+
+    if ( available_amount( beach_comb ) == 0 &&
+	 available_amount( driftwood_beach_comb ) == 0) {
+        abort( "You don't have a Beach Comb or a driftwood beach comb!" );
+    }
 
     // Ensure configuration is sane
     validate_configuration();
@@ -1139,11 +1166,6 @@ void main(string... parameters )
     // Create maps indexing it by # of minutes down the beach.
     print();
     populate_tile_maps(true);
-
-    // If user only wants to see the data, nothing more to do
-    if (mode == "data") {
-	exit;
-    }
 
     // If the user wants to comb rare tiles, set up helpful data structures
     if (mode == "rare") {
