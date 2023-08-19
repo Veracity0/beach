@@ -536,7 +536,7 @@ coords_list flatten_coords_map(coords_map map)
 {
     coords_list flat_list;
     foreach beach, list in map {
-	foreach tile in list {
+	foreach key, tile in list {
 	    flat_list[count(flat_list)] = tile;
 	}
     }
@@ -804,9 +804,15 @@ buffer comb_square( coords c, string type )
 
 buffer comb_beach( buffer page )
 {
-    void save_page_html( buffer page )
+    void save_page_html( coords c, buffer page )
     {
-	string filename = my_name() + "_beachcombings_" + now_to_string( "YYYYMMddHHmmssSSS" ) + ".txt";
+	string filename =
+	    my_name() +
+	    "_" + (c.minute) +
+	    "_" + (c.row) +
+	    "_" + (c.column + 1) +
+	    "_" + now_to_string( "YYYYMMddHHmmssSSS" ) +
+	    ".txt";
 	print( "Saving page HTML to " + filename, "red" );
 	beachcombings[ count( beachcombings ) ] = filename;
 	page.buffer_to_file(beach_file(filename));
@@ -849,7 +855,7 @@ buffer comb_beach( buffer page )
     }
 
     if ( special ) {
-	save_page_html( page );
+	save_page_html( c, page );
 	// For the above, log the page after combing, as well.
 	// special = false;
     }
@@ -927,7 +933,7 @@ buffer comb_beach( buffer page )
     }
 
     if ( special ) {
-	save_page_html( page );
+	save_page_html( c, page );
     }
 
     return page;
