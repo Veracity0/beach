@@ -754,11 +754,11 @@ beach_layout modify_square( beach_layout layout, coords c, string val )
 
 coords_list unknown_twinkles(int beach, coords_list twinkles)
 {
-    coords_list known_rares = rare_tiles_map[beach];
+    // Only skip known uncommons; we want to visit known rares.
     coords_list known_uncommons = uncommon_tiles_map[beach];
     coords_list unknowns;
     foreach key, c in twinkles {
-	if (known_rares contains key || known_uncommons contains key) {
+	if (known_uncommons contains key) {
 	    continue;
 	}
 	unknowns.add_tile(c);
