@@ -41,19 +41,6 @@ string to_string( coords c )
     return "(" + c.minute + "," + c.row + "," + ( c.column + 1 ) + ")";
 }
 
-// The string representation is the format expected by KoL in the
-// "coords" field of the choice adventure that visits a square
-
-string to_url_string( int minute, int row, int column )
-{
-    return row + "," + ( (minute * 10) - column );
-}
-
-string to_url_string( coords c )
-{
-    return to_url_string( c.minute, c.row, c.column );
-}
-
 // ***************************
 //         URL format        *
 // ***************************
@@ -68,6 +55,19 @@ string to_url_string( coords c )
 //
 // Unless you are parsing or creating such URLs, you shouldn't need any of this,
 // since KoLmafia's "beach" command (and BeachCombRequest) handles it all for you.
+
+// The string representation is the format expected by KoL in the
+// "coords" field of the choice adventure that visits a square
+
+string to_url_string( int minute, int row, int column )
+{
+    return row + "," + ( (minute * 10) - column );
+}
+
+string to_url_string( coords c )
+{
+    return to_url_string( c.minute, c.row, c.column );
+}
 
 coords to_coords( int row, int minute_column )
 {
@@ -114,12 +114,25 @@ coords to_coords( int key )
     return new coords( minute, row, column );
 }
 
+// ***************************
+//        Coords List        *
+// ***************************
+
 // A map from hash key -> tile.
 //
 // Essentially, this is a set of tiles; since the coords can be derived
 // from the has key, we don't REALLY need to store the actual tile.
 
 typedef coords[int] coords_list;
+
+coords_list coords_to_coords_list(coords... coords)
+{
+    coords_list result;
+    foreach n, c in coords {
+	result[c.to_key()] = c;
+    }
+    return result;
+}
 
 void add_tile(coords_list list, coords tile)
 {
@@ -139,6 +152,79 @@ void remove_tile(coords_list list, coords tile)
 }
 
 // ***************************
+//         Coords Map        *
+// ***************************
+
+// A Map that lets you look up tiles by # of minutes down the beach.
+
+typedef coords_list[int] coords_map;
+
+void add_tiles(coords_map map, coords_list list)
+{
+    foreach key, tile in list {
+	int minutes = tile.minute;
+	coords_list mmap = map[minutes];
+	mmap[key] = tile;
+	map[minutes] = mmap;
+    }
+}
+
+boolean remove_tile(coords_map map, coords c)
+{
+    int minute = c.minute;
+    coords_list list = map[minute];
+
+    if (list.count() == 0) {
+	return false;
+    }
+
+    list.remove_tile(c);
+    if (list.count() == 0) {
+	remove map[minute];
+    }
+    return true;
+}
+
+coords_list flatten(coords_map map)
+{
+    coords_list flat_list;
+    foreach beach, list in map {
+	foreach key, tile in list {
+	    flat_list[count(flat_list)] = tile;
+	}
+    }
+    return flat_list;
+}
+
+// ***************************
+//      Global Variables     *
+// ***************************
+
+// All twinkle tiles we have seen on the beach but have not visited
+static coords_list twinkle_tiles;
+
+// The set of rare tiles imported from combo
+static coords_list rare_tiles;
+// Rare tiles from combo that we have visited and verified
+static coords_list rare_tiles_seen;
+// Rare tiles from combo that we have visited and were not rare
+static coords_list rare_tiles_errors;
+// Rare tiles not in rare_tiles
+static coords_list rare_tiles_new;
+
+// Uncommon tiles discovered by Veracity's spading
+static coords_list uncommon_tiles;
+// Uncommon tiles not in uncommon_tiles
+static coords_list uncommon_tiles_new;
+
+// The last segment of the beach that we have looked at and started combing.
+static int spade_last_minutes;
+
+coords_map rare_tiles_map;
+coords_map uncommon_tiles_map;
+coords_map twinkles_map;
+
+// ***************************
 //         JSON format       *
 // ***************************
 
@@ -156,15 +242,6 @@ coords json_to_coords( string json )
     int row = object.get_json_int("row");
     int column = object.get_json_int("column");
     return new coords(minute, row, column);
-}
-
-coords_list coords_to_coords_list(coords... coords)
-{
-    coords_list result;
-    foreach n, c in coords {
-	result[c.to_key()] = c;
-    }
-    return result;
 }
 
 buffer coords_list_to_json( coords_list list )
@@ -225,25 +302,20 @@ void save_tiles(coords_list data, string filename)
 //            Files          *
 // ***************************
 
-// All twinkle tiles we have seen on the beach but have not visited
-static coords_list twinkle_tiles;
+void populate_tile_maps(boolean verbose)
+{
+    rare_tiles_map.add_tiles(rare_tiles);
+    rare_tiles_map.add_tiles(rare_tiles_new);
+    uncommon_tiles_map.add_tiles(uncommon_tiles);
+    uncommon_tiles_map.add_tiles(uncommon_tiles_new);
+    twinkles_map.add_tiles(twinkle_tiles);
 
-// The set of rare tiles imported from combo
-static coords_list rare_tiles;
-// Rare tiles from combo that we have visited and verified
-static coords_list rare_tiles_seen;
-// Rare tiles from combo that we have visited and were not rare
-static coords_list rare_tiles_errors;
-// Rare tiles not in rare_tiles
-static coords_list rare_tiles_new;
-
-// Uncommon tiles discovered by Veracity's spading
-static coords_list uncommon_tiles;
-// Uncommon tiles not in uncommon_tiles
-static coords_list uncommon_tiles_new;
-
-// The last segment of the beach that we have looked at and started combing.
-static int spade_last_minutes;
+    if (verbose) {
+	print("Beaches with rare tiles: " + count(rare_tiles_map));
+	print("Beaches with uncommon tiles: " + count(uncommon_tiles_map));
+	print("Beaches with unvisited twinkles: " + count(twinkles_map));
+    }
+}
 
 boolean load_tile_data(boolean verbose)
 {
@@ -266,7 +338,10 @@ boolean load_tile_data(boolean verbose)
 	print("Known uncommon tiles: " + count(uncommon_tiles));
 	print("New uncommon tiles: " + count(uncommon_tiles_new));
 	print("Last minutes down the beach spaded: " + spade_last_minutes);
+	print();
     }
+
+    populate_tile_maps(verbose);
 
     return true;
 }
