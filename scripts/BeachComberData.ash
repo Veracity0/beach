@@ -134,6 +134,15 @@ coords_list coords_to_coords_list(coords... coords)
     return result;
 }
 
+coords_list copy(coords_list list)
+{
+    coords_list result;
+    foreach n, c in list {
+	result[n] = c;
+    }
+    return result;
+}
+
 void add_tile(coords_list list, coords tile)
 {
     list[tile.to_key()] = tile;
@@ -183,6 +192,17 @@ boolean remove_tile(coords_map map, coords c)
 	remove map[minute];
     }
     return true;
+}
+
+coords_list to_coords_list(coords_map map)
+{
+    coords_list result;
+    foreach beach, list in map {
+	foreach key, tile in list {
+	    result[key] = tile;
+	}
+    }
+    return result;
 }
 
 coords_list flatten(coords_map map)
@@ -314,6 +334,7 @@ void populate_tile_maps(boolean verbose)
 	print("Beaches with rare tiles: " + count(rare_tiles_map));
 	print("Beaches with uncommon tiles: " + count(uncommon_tiles_map));
 	print("Beaches with unvisited twinkles: " + count(twinkles_map));
+	print();
     }
 }
 
@@ -357,4 +378,32 @@ void save_tile_data()
     buffer spade_minutes;
     spade_minutes.append(spade_last_minutes);
     buffer_to_file(spade_minutes, beach_file("spade.minutes.txt"));
+}
+
+// For merging newly discovered tiles into known tile lists.
+// This is for publishing updated data files
+
+void merge_tile_data(boolean verbose)
+{
+    uncommon_tiles_map.clear();
+    uncommon_tiles_map.add_tiles(uncommon_tiles);
+    uncommon_tiles_map.add_tiles(uncommon_tiles_new);
+    coords_list merged_uncommon_tiles = to_coords_list(uncommon_tiles_map);
+
+    int known_uncommon_count = count(uncommon_tiles);
+    int new_uncommon_count = count(uncommon_tiles_new);
+    int merged_uncommon_count = count(merged_uncommon_tiles);
+
+    if (verbose) {
+	print("Known uncommon tiles: " + known_uncommon_count);
+	print("New uncommon tiles: " + new_uncommon_count);
+	print("Merged uncommon tiles: " + merged_uncommon_count);
+    }
+
+    if (known_uncommon_count < merged_uncommon_count) {
+	uncommon_tiles = merged_uncommon_tiles;
+	uncommon_tiles_new.clear();
+	save_tiles(uncommon_tiles, "tiles.uncommon.json");
+	save_tiles(uncommon_tiles_new, "tiles.uncommon.new.json");
+    }
 }

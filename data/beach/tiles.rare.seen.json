@@ -4,10 +4,17 @@
   { "minute": 1669, "row": 7 , "column": 4 },
   { "minute": 1901, "row": 10 , "column": 4 },
   { "minute": 2683, "row": 9 , "column": 6 },
+  { "minute": 4067, "row": 3 , "column": 8 },
   { "minute": 4565, "row": 9 , "column": 3 },
   { "minute": 4913, "row": 4 , "column": 9 },
+  { "minute": 5367, "row": 5 , "column": 1 },
   { "minute": 5540, "row": 9 , "column": 4 },
+  { "minute": 6079, "row": 9 , "column": 5 },
   { "minute": 6632, "row": 9 , "column": 5 },
   { "minute": 6696, "row": 7 , "column": 5 },
-  { "minute": 9211, "row": 9 , "column": 0 }
+  { "minute": 6784, "row": 10 , "column": 6 },
+  { "minute": 7971, "row": 10 , "column": 1 },
+  { "minute": 9211, "row": 9 , "column": 0 },
+  { "minute": 9472, "row": 8 , "column": 1 },
+  { "minute": 9616, "row": 8 , "column": 9 }
 ]

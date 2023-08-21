@@ -172,6 +172,10 @@ void parse_parameters(string... parameters)
 	case "data":
 	    mode = "data";
 	    continue;
+	case "merge":
+	    // Undocumented; for my use only
+	    mode = "merge";
+	    continue;
 	case "random":
 	    mode = "random";
 	    pick_strategy = "twinkle";
@@ -626,8 +630,10 @@ coords pick_coords_to_comb( int beach, sorted_beach_map map )
 	coords candidate;
 	// Remove known uncommons
 	foreach key, c in known_uncommons {
-	    candidate = c;
-	    remove twinkles[key];
+	    if (twinkles contains key) {
+		candidate = c;
+		remove twinkles[key];
+	    }
 	}
 	// 3) If there are remaining twinkles, they are new
 	// Return the first one found
@@ -1083,6 +1089,14 @@ void main(string... parameters )
     // (which will print info) and then exit.
     if (mode == "data") {
 	load_tile_data(true);
+	exit;
+    }
+
+    // For merging locally discovered tile data with released data
+    // Undocumented; for my use only!
+    if (mode == "merge") {
+	load_tile_data(true);
+	merge_tile_data(true);
 	exit;
     }
 
