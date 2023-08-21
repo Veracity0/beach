@@ -172,6 +172,10 @@ void parse_parameters(string... parameters)
 	case "data":
 	    mode = "data";
 	    continue;
+	case "merge":
+	    // Undocumented; for my use only
+	    mode = "merge";
+	    continue;
 	case "random":
 	    mode = "random";
 	    pick_strategy = "twinkle";
@@ -331,6 +335,26 @@ string square_at( beach_layout layout, coords c )
     return layout[ c.row ].char_at( c.column );
 }
 
+beach_layout modify_square( beach_layout layout, coords c, string val )
+{
+    int row = c.row;
+    int column = c.column;
+
+    string squares = layout[ row ];
+
+    buffer modified;
+    if ( column > 0 ) {
+	modified.append( squares.substring( 0, column ) );
+    }
+    modified.append( val );
+    if ( column < squares.length() - 1 ) {
+	modified.append( squares.substring( column + 1, squares.length() ) );
+    }
+
+    layout[ row ] = modified;
+    return layout;
+}
+
 // This data structure contains all of the squares of a beach_layout
 // split into sorted lists of coords of a particular coded type, mapping
 // from code to list of coords
@@ -482,40 +506,6 @@ string categorize_tile(int[item] items)
     return "unknown";
 }
 
-// BeachComberData loaded the set of known tiles into various coords_lists
-// Make some maps that let us look up tiles by # of minutes down the beach.
-
-typedef coords_list[int] coords_map;
-
-coords_map rare_tiles_map;
-coords_map uncommon_tiles_map;
-coords_map twinkles_map;
-
-void populate_tile_maps(boolean verbose)
-{
-    void add_to_map(coords_map map, coords_list list)
-    {
-	foreach key, tile in list {
-	    int minutes = tile.minute;
-	    coords_list mmap = map[minutes];
-	    mmap[key] = tile;
-	    map[minutes] = mmap;
-	}
-    }
-
-    rare_tiles_map.add_to_map(rare_tiles);
-    rare_tiles_map.add_to_map(rare_tiles_new);
-    uncommon_tiles_map.add_to_map(uncommon_tiles);
-    uncommon_tiles_map.add_to_map(uncommon_tiles_new);
-    twinkles_map.add_to_map(twinkle_tiles);
-
-    if (verbose) {
-	print("Beaches with rare tiles: " + count(rare_tiles_map));
-	print("Beaches with uncommon tiles: " + count(uncommon_tiles_map));
-	print("Beaches with unvisited twinkles: " + count(twinkles_map));
-    }
-}
-
 // ***************************
 //          Strategies       *
 // ***************************
@@ -532,24 +522,13 @@ int current_beach = 0;
 
 coords_list available_rare_tiles;
 
-coords_list flatten_coords_map(coords_map map)
-{
-    coords_list flat_list;
-    foreach beach, list in map {
-	foreach key, tile in list {
-	    flat_list[count(flat_list)] = tile;
-	}
-    }
-    return flat_list;
-}
-
 void prepare_rare_tiles()
 {
     // The rare_tiles_map contains tiles from both rare_tiles and
     // rare_tiles_new. Therefore, flatten the map to get all of the
     // tiles in order.
 
-    available_rare_tiles = rare_tiles_map.flatten_coords_map();
+    available_rare_tiles = rare_tiles_map.flatten();
 
     // The tiles are in coordinates order, but are indexed like an
     // array, not by coordinates key. That makes it easy to randomly
@@ -574,20 +553,9 @@ void remove_rare_tile(coords c)
 {
     // If we have just picked a rare tile, it is now combed sand.
     // Remove it from consideration.
-    int  minute = c.minute;
-    coords_list rares = rare_tiles_map[minute];
-
-    // This might be a new rare tile.
-    if (rares.count() == 0) {
-	return;
+    if (rare_tiles_map.remove_tile(c)) {
+	available_rare_tiles = rare_tiles_map.flatten();
     }
-
-    // It is a known beach, at least.
-    rares.remove_tile(c);
-    if (rares.count() == 0) {
-	remove rare_tiles_map[minute];
-    }
-    available_rare_tiles = rare_tiles_map.flatten_coords_map();
 }
 
 int next_rare_beach()
@@ -662,8 +630,10 @@ coords pick_coords_to_comb( int beach, sorted_beach_map map )
 	coords candidate;
 	// Remove known uncommons
 	foreach key, c in known_uncommons {
-	    candidate = c;
-	    remove twinkles[key];
+	    if (twinkles contains key) {
+		candidate = c;
+		remove twinkles[key];
+	    }
 	}
 	// 3) If there are remaining twinkles, they are new
 	// Return the first one found
@@ -728,29 +698,9 @@ void put_away_comb()
 
 int [string] combed_rarities;
 int [string] combed_types;
-int [item] combed_items;
 int combed_meat;
+int [item] combed_items;
 string [int] beachcombings;
-
-beach_layout modify_square( beach_layout layout, coords c, string val )
-{
-    int row = c.row;
-    int column = c.column;
-
-    string squares = layout[ row ];
-
-    buffer modified;
-    if ( column > 0 ) {
-	modified.append( squares.substring( 0, column ) );
-    }
-    modified.append( val );
-    if ( column < squares.length() - 1 ) {
-	modified.append( squares.substring( column + 1, squares.length() ) );
-    }
-
-    layout[ row ] = modified;
-    return layout;
-}
 
 coords_list unknown_twinkles(int beach, coords_list twinkles)
 {
@@ -907,7 +857,7 @@ buffer comb_beach( buffer page )
 	tile_type = "rare";
     }
 
-    if (tile_type == "rare") {
+    if (tile_type == "rare" && mode == "rare") {
 	remove_rare_tile(c);
     }
 
@@ -1139,8 +1089,14 @@ void main(string... parameters )
     // (which will print info) and then exit.
     if (mode == "data") {
 	load_tile_data(true);
-	print();
-	populate_tile_maps(true);
+	exit;
+    }
+
+    // For merging locally discovered tile data with released data
+    // Undocumented; for my use only!
+    if (mode == "merge") {
+	load_tile_data(true);
+	merge_tile_data(true);
 	exit;
     }
 
@@ -1167,11 +1123,6 @@ void main(string... parameters )
     if (!load_tile_data(true)) {
 	abort("Unable to load tile data");
     }
-
-    // Tile data is in multiple coords_list variables.
-    // Create maps indexing it by # of minutes down the beach.
-    print();
-    populate_tile_maps(true);
 
     // If the user wants to comb rare tiles, set up helpful data structures
     if (mode == "rare") {
