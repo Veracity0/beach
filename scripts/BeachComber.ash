@@ -812,7 +812,7 @@ coords_list unknown_twinkles(int beach, coords_list twinkles)
     return unknowns;
 }
 
-void beach_completed(coords c)
+void beach_completed()
 {
     // We'll stop exploring any beach if it is out of twinkles
     current_beach = 0;
@@ -823,14 +823,15 @@ void beach_completed(coords c)
 	return;
     }
     // If we are looking for rares and none are left, we're done
-    if (mode == "rares") {
+    if (mode == "rare") {
 	// If we've run out of rare tiles but were checking only the row
 	// next to the water, remove that limitation and recalculate.
-	if (available_rare_tiles.count() == 0 && tidal) {
+	if (tidal && available_rare_tiles.count() == 0) {
 	    tidal = false;
 	    current_tides = -1;
 	    repopulate_rare_tiles_map();
-	    check_tides(false);
+	    check_tides(true);
+	    prepare_rare_tiles();
 	}
 	if (available_rare_tiles.count() == 0) {
 	    completed = true;
@@ -937,7 +938,7 @@ buffer comb_beach( buffer page )
     // We don't intentionally farm more than once in a beach segment
     // with no unknown twinkles.
     if (pick_strategy == "first" || count(unknowns) == 0) {
-	beach_completed(c);
+	beach_completed();
     }
 
     // Look for rainbow pearls
