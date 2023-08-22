@@ -168,13 +168,18 @@ void remove_tile(coords_list list, coords tile)
 
 typedef coords_list[int] coords_map;
 
+void add_tile(coords_map map, coords c)
+{
+    int minutes = c.minute;
+    coords_list list = map[minutes];
+    list.add_tile(c);
+    map[minutes] = list;
+}
+
 void add_tiles(coords_map map, coords_list list)
 {
     foreach key, tile in list {
-	int minutes = tile.minute;
-	coords_list mmap = map[minutes];
-	mmap[key] = tile;
-	map[minutes] = mmap;
+	map.add_tile(tile);
     }
 }
 
@@ -192,6 +197,13 @@ boolean remove_tile(coords_map map, coords c)
 	remove map[minute];
     }
     return true;
+}
+
+void remove_tiles(coords_map map, coords_list list)
+{
+    foreach key, tile in list {
+	map.remove_tile(tile);
+    }
 }
 
 coords_list to_coords_list(coords_map map)
@@ -266,9 +278,7 @@ coords json_to_coords( string json )
 
 buffer coords_list_to_json( coords_list list )
 {
-    string nl = "\n";
-    buffer buf;
-    buf.append("[");
+    buffer buf = "[";
     int count = 0;
     foreach key, c in list {
 	if (count++ > 0) {
@@ -375,8 +385,7 @@ void save_tile_data()
     save_tiles(rare_tiles_new, "tiles.rare.new.json");
     save_tiles(uncommon_tiles_new, "tiles.uncommon.new.json");
 
-    buffer spade_minutes;
-    spade_minutes.append(spade_last_minutes);
+    buffer spade_minutes = to_string(spade_last_minutes);
     buffer_to_file(spade_minutes, beach_file("spade.minutes.txt"));
 }
 
