@@ -313,9 +313,14 @@ coords_list json_to_coords_list( buffer json )
 static string BEACH_DIRECTORY = "beach";
 static string PATH_SEPARATOR = "/";
 
+string beach_file(string directory, string filename)
+{
+    return directory + PATH_SEPARATOR + fileName;
+}
+
 string beach_file(string filename)
 {
-    return "data" + PATH_SEPARATOR + BEACH_DIRECTORY + PATH_SEPARATOR + filename;
+    return beach_file("data", beach_file(BEACH_DIRECTORY, filename));
 }
 
 coords_list load_tiles(string filename)

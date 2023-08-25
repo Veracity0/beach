@@ -534,7 +534,7 @@ string categorize_tile(int[item] items)
 int current_beach = 0;
 
 // The tides can cover from 0-4 rows of tiles.
-// The Wiki says there is a nine-day cycle:
+// The Wiki says there is an eight-day cycle:
 // 0, 1, 2, 3, 4, 3, 2, 1, 0 ...
 //
 // row 1: available 1 day out of eight (tides = 0)
@@ -574,13 +574,13 @@ void prepare_rare_tiles()
     // how quickly it happens.
 
     // My initial take is that if we randomly pick a tile from the list -
-    // and recreate the list every time we comb one - that might suffice.
+    // and recreate the list every time we comb one - that will suffice.
 }
 
 boolean check_tides(boolean verbose)
 {
     int tides = get_tides();
-    if (current_tides != tides) {
+    if (tides >= 0 && current_tides != tides) {
 	int covered = 0;
 	int dry = 0;
 	int kept = 0;
@@ -591,7 +591,7 @@ boolean check_tides(boolean verbose)
 		if (coords.row < wettest) {
 		    covered++;
 		    remove list[key];
-		} else if (tidal && coords.row > wettest) {
+		} else if (tidal && wettest < 5 && coords.row > wettest) {
 		    dry++;
 		    remove list[key];
 		} else {
@@ -872,7 +872,7 @@ buffer comb_beach( buffer page )
 	    ".html";
 	print( "Saving page HTML to " + filename, "red" );
 	beachcombings[ count( beachcombings ) ] = filename;
-	page.buffer_to_file(beach_file(filename));
+	page.buffer_to_file(beach_file(beach_file("html", filename)));
     }
 
     // We depend on KoLmafia to parse the page into properties
