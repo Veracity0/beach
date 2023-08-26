@@ -117,6 +117,7 @@ void print_help()
     print_html("");
     print_html(spaces + "<b>help</b>: print this message" );
     print_html(spaces + "<b>data</b>: load, analyze, and print tile data, and then exit" );
+    print_html(spaces + "<b>prune</b>: prune locally discovered tile data after updating, and then exit" );
 }
 
 // Mode for selecting sections of the beach to visit
@@ -178,6 +179,9 @@ void parse_parameters(string... parameters)
 	    continue;
 	case "data":
 	    mode = "data";
+	    continue;
+	case "prune":
+	    mode = "prune";
 	    continue;
 	case "merge":
 	    // Undocumented; for my use only
@@ -401,13 +405,6 @@ sorted_beach_map sort_beach( int beach, beach_layout layout )
 sorted_beach_map sort_beach()
 {
     return sort_beach( get_minutes(), get_beach_layout() );
-}
-
-coords_list extract_twinkles(sorted_beach_map map) {
-    coords_list twinkles;
-    twinkles.add_tiles(map["W"]);
-    twinkles.add_tiles(map["t"]);
-    return twinkles;
 }
 
 void save_visited_tile(coords tile, string tile_type) {
@@ -798,18 +795,23 @@ int combed_meat;
 int [item] combed_items;
 string [int] beachcombings;
 
-coords_list unknown_twinkles(int beach, coords_list twinkles)
+coords_list unknown_tiles(int beach, coords_list tiles, coords_map map)
 {
-    // Only skip known uncommons; we want to visit known rares.
-    coords_list known_uncommons = uncommon_tiles_map[beach];
+    coords_list knowns = map[beach];
     coords_list unknowns;
-    foreach key, c in twinkles {
-	if (known_uncommons contains key) {
+    foreach key, c in tiles {
+	if (knowns contains key) {
 	    continue;
 	}
 	unknowns.add_tile(c);
     }
     return unknowns;
+}
+
+coords_list unknown_twinkles(int beach, coords_list twinkles)
+{
+    // Only skip known uncommons; we want to visit known rares.
+    return unknown_tiles(beach, twinkles, uncommon_tiles_map);
 }
 
 void beach_completed()
@@ -886,9 +888,15 @@ buffer comb_beach( buffer page )
 	prepare_rare_tiles();
     }
 
+    // Save previously unseen sand castles
+    coords_list unknown_castles = unknown_tiles( beach, map["C"], castle_tiles_map );
+    castle_tiles_new.add_tiles(unknown_castles);
+
     // Inspect the layout and find all squares with twinkles.
     // (Or a whale)
-    coords_list twinkles = extract_twinkles(map);
+    coords_list twinkles;
+    twinkles.add_tiles(map["W"]);
+    twinkles.add_tiles(map["t"]);
 
     // Save previously unvisited twinkles
     coords_list unknowns = unknown_twinkles( beach, twinkles );
@@ -1202,6 +1210,13 @@ void main(string... parameters )
     // (which will print info) and then exit.
     if (mode == "data") {
 	load_tile_data(true);
+	exit;
+    }
+
+    // For pruning locally discovered tile data after updating
+    if (mode == "prune") {
+	load_tile_data(true);
+	prune_tile_data(true);
 	exit;
     }
 
