@@ -140,9 +140,12 @@ void print_help()
 //
 // Special strategies:
 //
-// We will always not consider known rare tiles that are covered by the tides.
+// We will always skip known rare tiles that are covered by the tides.
+//
 // If "tidal", we will first consider rare tiles that are the closest to the water,
 // since if the tides are receding, that row was just uncovered today.
+//
+// If "unverified", we will look for rare tiles which have not yet been verified.
 //
 // Interactions:
 //
@@ -158,6 +161,7 @@ string strategy = "known";
 int turns = 0;
 int beach = 0;
 boolean tidal = false;
+boolean unverified = false;
 boolean completed = false;
 
 void parse_parameters(string... parameters)
@@ -208,6 +212,9 @@ void parse_parameters(string... parameters)
 	    continue;
 	case "tidal":
 	    tidal = true;
+	    continue;
+	case "unverified":
+	    unverified = true;
 	    continue;
 	}
 
@@ -412,9 +419,13 @@ void save_visited_tile(coords tile, string tile_type) {
     switch (tile_type) {
     case "rare":
 	// If this was a known rare tile, mark it as seen
-	if (rare_tiles contains key) {
+	if (rare_tiles_verified contains key) {
+	    // Previously verified.
+	} else if (rare_tiles contains key) {
+	    // Not previously verified.
 	    rare_tiles_seen.add_tile(tile);
 	} else {
+	    // Brand new. Score!
 	    rare_tiles_new.add_tile(tile);
 	}
 	return;
@@ -613,6 +624,38 @@ boolean check_tides(boolean verbose)
 	}
 
 	current_tides = tides;
+	return true;
+    }
+    return false;
+}
+
+boolean check_unverified(boolean verbose)
+{
+    if (unverified) {
+	int verified = 0;
+	int kept = 0;
+	foreach beach, list in rare_tiles_map {
+	    foreach key, coords in list {
+		if (rare_tiles_verified contains key) {
+		    verified++;
+		    remove list[key];
+		} else {
+		    kept++;
+		}
+	    }
+	    if (count(list) == 0) {
+		remove rare_tiles_map[beach];
+	    }
+	}
+
+	if (verbose) {
+	    if (verified > 0) {
+		print(verified + " rare tiles have already been verified");
+	    }
+	    if (kept > 0) {
+		print(kept + " unverified rare tiles are candidates for combing");
+	    }
+	}
 	return true;
     }
     return false;
@@ -831,6 +874,14 @@ void beach_completed()
 	if (tidal && available_rare_tiles.count() == 0) {
 	    tidal = false;
 	    current_tides = -1;
+	    repopulate_rare_tiles_map();
+	    check_tides(true);
+	    prepare_rare_tiles();
+	}
+	// If we've run out of unidentified rare tiles but were
+	// preferring those, remove that limitation and recalculate.
+	if (unverified && available_rare_tiles.count() == 0) {
+	    unverified = false;
 	    repopulate_rare_tiles_map();
 	    check_tides(true);
 	    prepare_rare_tiles();
@@ -1255,6 +1306,7 @@ void main(string... parameters )
     // If the user wants to comb rare tiles, set up helpful data structures
     if (mode == "rare") {
 	check_tides(true);
+	check_unverified(true);
 	prepare_rare_tiles();
     }
 
