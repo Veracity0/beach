@@ -1267,7 +1267,7 @@ void main(string... parameters )
     // For pruning locally discovered tile data after updating
     if (mode == "prune") {
 	load_tile_data(true);
-	prune_tile_data(true);
+	prune_tile_data(true, true);
 	exit;
     }
 

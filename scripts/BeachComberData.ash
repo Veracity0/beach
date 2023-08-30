@@ -289,7 +289,7 @@ coords_map castle_tiles_map;
 
 string coords_to_json( coords coords )
 {
-    return "{ \"minute\": " + coords.minute + ", \"row\": " + coords.row + " , \"column\": " + coords.column + " }";
+    return "{ \"minute\": " + coords.minute + ", \"row\": " + coords.row + ", \"column\": " + coords.column + " }";
 }
 
 coords json_to_coords( string json )
@@ -441,6 +441,7 @@ void merge_tile_data(boolean verbose)
     {
 	// Rare tiles
 	// *** later
+	// save_tiles(rare_tiles, "tiles.rare.json");
     }
 
     void merge_verified_tiles()
@@ -530,7 +531,7 @@ void merge_tile_data(boolean verbose)
 // For pruning published tile data from your locally discovered tile data.
 // This is for sharing only new data with the project.
 
-void prune_tile_data(boolean verbose)
+void prune_tile_data(boolean verbose, boolean save)
 {
     void prune_rare_tiles()
     {
@@ -546,7 +547,7 @@ void prune_tile_data(boolean verbose)
 	    print("Not yet integrated rare tiles: " + new_new_count);
 	}
 
-	if (new_new_count < original_new_count) {
+	if (save && new_new_count < original_new_count) {
 	    save_tiles(rare_tiles_new, "tiles.rare.new.json");
 	}
     }
@@ -557,15 +558,16 @@ void prune_tile_data(boolean verbose)
 	int known_verified_count = count(rare_tiles_verified);
 	int original_seen_count = count(rare_tiles_seen);
 	rare_tiles_seen.remove_tiles(rare_tiles_verified);
+	rare_tiles_seen.remove_tiles(rare_tiles_new);
 	int new_seen_count = count(rare_tiles_seen);
 
 	if (verbose) {
 	    print("Verified rare tiles: " + known_verified_count);
 	    print("Locally seen rare tiles: " + original_seen_count);
-	    print("Not previously verified tiles: " + new_seen_count);
+	    print("Not yet integrated verified tiles: " + new_seen_count);
 	}
 
-	if (new_seen_count < original_seen_count) {
+	if (save && new_seen_count < original_seen_count) {
 	    save_tiles(rare_tiles_seen, "tiles.rare.seen.json");
 	}
     }
@@ -584,8 +586,8 @@ void prune_tile_data(boolean verbose)
 	    print("Not yet integrated uncommon tiles: " + new_new_count);
 	}
 
-	if (new_new_count < original_new_count) {
-	    save_tiles(rare_tiles_seen, "tiles.uncommon.new.json");
+	if (save && new_new_count < original_new_count) {
+	    save_tiles(uncommon_tiles_new, "tiles.uncommon.new.json");
 	}
     }
 
@@ -603,7 +605,7 @@ void prune_tile_data(boolean verbose)
 	    print("Not yet integrated sand castles: " + new_new_count);
 	}
 
-	if (new_new_count < original_new_count) {
+	if (save && new_new_count < original_new_count) {
 	    save_tiles(rare_tiles_seen, "tiles.castle.new.json");
 	}
     }
