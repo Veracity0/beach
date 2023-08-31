@@ -132,7 +132,7 @@ void parse_parameters(string... parameters)
 	// If we are logged in, use current player name
 	string name = my_name();
 	if (name == "") {
-	    print("YOu are not logged in. Which player's sessions should I examine?");
+	    print("You are not logged in. Which player's sessions should I examine?");
 	    exit;
 	}
 
