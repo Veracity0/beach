@@ -145,7 +145,9 @@ void print_help()
 // If "tidal", we will first consider rare tiles that are the closest to the water,
 // since if the tides are receding, that row was just uncovered today.
 //
-// If "unverified", we will look for rare tiles which have not yet been verified.
+// If "unpublished", we will then look for rare tiles which we have not yet published
+//
+// If "unverified", we will then look for rare tiles which have not yet been verified.
 //
 // Interactions:
 //
@@ -161,6 +163,7 @@ string strategy = "known";
 int turns = 0;
 int beach = 0;
 boolean tidal = false;
+boolean unpublished = false;
 boolean unverified = false;
 boolean completed = false;
 
@@ -175,12 +178,8 @@ void parse_parameters(string... parameters)
 	switch (param) {
 	case "":
 	    continue;
-	case "free":
-	    turns = 0;
-	    continue;
-	case "all":
-	    turns = my_adventures();
-	    continue;
+
+	// Commands to print or manipulate tile data
 	case "data":
 	    mode = "data";
 	    continue;
@@ -191,39 +190,70 @@ void parse_parameters(string... parameters)
 	    // Undocumented; for my use only
 	    mode = "merge";
 	    continue;
+
+	// How many turns to spend combing
+	case "free":
+	    turns = 0;
+	    continue;
+	case "all":
+	    turns = my_adventures();
+	    continue;
+
+	// How to pick which beach to visit
 	case "random":
+	    // We don't care. Let KoL pick one for us.
 	    mode = "random";
 	    pick_strategy = "twinkle";
 	    continue;
 	case "rare":
+	    // Go only to beaches where rares have been reported.
+	    // Just like everybody else. Let the fastest comber win.
+	    // Derby style! Good luck!
 	    mode = "rare";
 	    pick_strategy = "first";
 	    continue;
 	case "spade":
+	    // We want to methodically visit all the beaches in order to discover
+	    // new tile data - potentially including unpublished rares
 	    mode = "spade";
 	    pick_strategy = "twinkle";
 	    continue;
-	case "twinkle":
-	case "twinkles":
-	    pick_strategy = "twinkle";
-	    continue;
+
+        // Strategies for handling unknown twinkles
 	case "first":
+	    // Pick only the first.
 	    pick_strategy = "first";
 	    continue;
+	case "twinkle":
+	case "twinkles":
+	    // Pick all of them. Mini-spading.
+	    pick_strategy = "twinkle";
+	    continue;
+
+        // Strategies for selecting rare tiles
 	case "tidal":
+	    // Look first at the row which is next to the water.
 	    tidal = true;
 	    continue;
+	case "unpublished":
+	    // Look first for tiles we have discovered but not yet published
+	    unpublished = true;
+	    continue;
 	case "unverified":
+	    // Look first for published tiles we have not yet verified
 	    unverified = true;
 	    continue;
 	}
 
 	if (param.is_integer()) {
+	    // Use this many (non-free) turns. As opposed to "all".
 	    turns = param.to_int();
 	    continue;
 	}
 
 	if (param.starts_with("minutes=")) {
+	    // Investigate a single beach and comb all previously unknown
+	    // twinkles, limited by the specified number of turns, if any.
 	    int index = param.index_of("=");
 	    string value = param.substring(index + 1);
 	    beach = value.is_integer() ? value.to_int() : 0;
@@ -556,21 +586,32 @@ int current_tides = -1;
 // If we are in "rare" mode, we want to look for rares.
 // We need more data structures to enable that.
 
+// The list of known uncombed rare tiles.
 coords_list available_rare_tiles;
 
-void prepare_rare_tiles()
+// The list of known rare tiles we have combed
+coords_list rare_tiles_combed;
+
+// This list is flattened so we can randomly index into it
+coords_list filtered_rare_tiles;
+
+void prepare_rare_tiles(boolean verbose)
 {
     // The rare_tiles_map contains tiles from both rare_tiles and
-    // rare_tiles_new. Therefore, flatten the map to get all of the
-    // tiles in order.
+    // rare_tiles_new. Put it into a list so we can filter it.
 
-    available_rare_tiles = rare_tiles_map.flatten();
+    available_rare_tiles = rare_tiles_map.to_coords_list();
+
+    // *** It would be nice if we knew  "combed today across all sessions"
+    // *** Perhaps have tiles.rare.combed.json and last.combed.date.txt?
+    // Remove any we have combed this session.
+    available_rare_tiles.remove_tiles(rare_tiles_combed);
 
     // The tiles are in coordinates order, but are indexed like an
     // array, not by coordinates key. That makes it easy to randomly
     // index into, or sequentially iterate through.
 
-    // combo deterministcally (using player id as random seed) shuffles
+    // combo deterministically (using player id as random seed) shuffles
     // such a list and iterates through it, picking up each day from
     // wherever it left off the previous day.
     //
@@ -587,27 +628,87 @@ void prepare_rare_tiles()
 
 boolean check_tides(boolean verbose)
 {
+    // Return true if we filtered out wave-washed tiles
     int tides = get_tides();
     if (tides >= 0 && current_tides != tides) {
 	int covered = 0;
-	int dry = 0;
 	int kept = 0;
 	// If tides are from 1-4, all those rows are unavailable.
 	int wettest = tides + 1;
-	foreach beach, list in rare_tiles_map {
-	    foreach key, coords in list {
-		if (coords.row < wettest) {
-		    covered++;
-		    remove list[key];
-		} else if (tidal && wettest < 5 && coords.row > wettest) {
-		    dry++;
-		    remove list[key];
-		} else {
-		    kept++;
-		}
+	foreach key, coords in available_rare_tiles {
+	    if (coords.row < wettest) {
+		covered++;
+		remove available_rare_tiles[key];
+	    } else {
+		kept++;
 	    }
-	    if (count(list) == 0) {
-		remove rare_tiles_map[beach];
+	}
+
+	if (verbose) {
+	    if (covered > 0) {
+		print(covered + " rare tiles are washed by the waves");
+	    }
+	    if (kept > 0) {
+		print(kept + " rare tiles are candidates for combing");
+	    }
+	}
+
+	current_tides = tides;
+	return covered > 0;
+    }
+    return false;
+}
+
+boolean filter_rare_tiles(boolean verbose)
+{
+    // We have three criteria for pruning rare tiles:
+    // First visit rare tiles that are next to the water.
+    // If none, visit unpublished rare tiles.
+    // If none, visit unverified rare tiles.
+    // Otherwise, all rare tiles are game.
+
+    rare_tiles = available_rare_tiles.copy();
+
+    boolean filter_tides()
+    {
+	// Return true if we filtered out dry tiles
+
+	// If we don't care about the tides, do not filter on them
+	if (!tidal) {
+	    return false;
+	}
+
+	int tides = get_tides();
+
+	// Until we know what the tides are, we cannot filter on them
+	if (tides < 0) {
+	    return false;
+	}
+
+	// If tides are from 1-4, those rows are unavailable.
+	int wettest = tides + 1;
+
+	// If the tides are at their highest, we don't care about tides
+	// Since nothing new was revealed today.
+	if (wettest > 4) {
+	    return false;
+	}
+
+	int covered = 0;
+	int dry = 0;
+	int kept = 0;
+
+	foreach key, coords in rare_tiles {
+	    // This should be redundant; when we check the tides we already
+	    // pruned available_rare_tiles which are covered in water
+	    if (coords.row < wettest) {
+		covered++;
+		remove rare_tiles[key];
+	    } else if (coords.row > wettest) {
+		dry++;
+		remove rare_tiles[key];
+	    } else {
+		kept++;
 	    }
 	}
 
@@ -623,28 +724,64 @@ boolean check_tides(boolean verbose)
 	    }
 	}
 
-	current_tides = tides;
+	return dry > 0;
+    }
+
+    boolean filter_published()
+    {
+	// Return true if we filtered out published tiles
+
+	// If we don't care about published tides, do not filter on them
+	if (!unpublished) {
+	    return false;
+	}
+
+	// If we don't have any unpublished tiles, do not filter on them
+	if (rare_tiles_new.count() == 0) {
+	    return false;
+	}
+
+	coords_list available_new_tiles;
+	int kept = 0;
+	foreach key, coords in rare_tiles {
+	    if (rare_tiles_new contains coords.to_key()) {
+		available_new_tiles.add_tile(coords);
+		kept++;
+	    }
+	}
+
+	// If none of our unpublished tiles is available, do not filter on them.
+	if (kept == 0) {
+	    return false;
+	}
+
+	// If there are some available new tiles, that is the new filtered list
+	rare_tiles = available_new_tiles;
+	if (verbose) {
+	    print(kept + " unpublished tiles are candidates for combing");
+	}
+
 	return true;
     }
-    return false;
-}
 
-boolean check_unverified(boolean verbose)
-{
-    if (unverified) {
+    boolean filter_unverified()
+    {
+	// Return true if we filtered out unverified tiles
+
+	// If we don't care about unverified tides, do not filter on them
+	if (!unverified) {
+	    return false;
+	}
+
 	int verified = 0;
 	int kept = 0;
-	foreach beach, list in rare_tiles_map {
-	    foreach key, coords in list {
-		if (rare_tiles_verified contains key) {
-		    verified++;
-		    remove list[key];
-		} else {
-		    kept++;
-		}
-	    }
-	    if (count(list) == 0) {
-		remove rare_tiles_map[beach];
+	foreach key, coords in rare_tiles {
+	    if (rare_tiles_verified contains coords.to_key() ||
+		rare_tiles_seen contains coords.to_key()) {
+		verified++;
+		remove rare_tiles[key];
+	    } else {
+		kept++;
 	    }
 	}
 
@@ -656,32 +793,31 @@ boolean check_unverified(boolean verbose)
 		print(kept + " unverified rare tiles are candidates for combing");
 	    }
 	}
+	return verified > 0;
+    }
+
+    // Return true if any filter removed tiles.
+    boolean filtered =  filter_tides() || filter_published() || filter_unverified();
+    filtered_rare_tiles = rare_tiles.flatten();
+    return filtered;
+}
+
+boolean remove_rare_tile(coords c, boolean rare)
+{
+    if (rare) {
+	// It is now combed sand.
+	rare_tiles_combed.add_tile(c);
+    }
+    // If we knew this was rare...
+    if (available_rare_tiles contains c.to_key()) {
+	// ... don't consider it again this session.
+	available_rare_tiles.remove_tile(c);
+	// The caller needs to refilter
 	return true;
     }
+
+    // Otherwise, this was a new tile, and we don't need to refilter
     return false;
-}
-
-// Save a list of rare tiles we have combed
-
-coords_list combed_rare_tiles;
-
-void remove_rare_tile(coords c)
-{
-    // If we have just combed a rare tile, it is now combed sand.
-    // Remove it from further consideration this session.
-    if (rare_tiles_map.remove_tile(c)) {
-	combed_rare_tiles.add_tile(c);
-	prepare_rare_tiles();
-    }
-}
-
-void repopulate_rare_tiles_map()
-{
-    // Rebuild the rare tile map, omitting ones we combed this session.
-    rare_tiles_map.clear();
-    rare_tiles_map.add_tiles(rare_tiles);
-    rare_tiles_map.add_tiles(rare_tiles_new);
-    rare_tiles_map.remove_tiles(combed_rare_tiles);
 }
 
 int next_rare_beach()
@@ -692,10 +828,10 @@ int next_rare_beach()
 	return current_beach;
     }
 
-    int size = available_rare_tiles.count();
+    int size = filtered_rare_tiles.count();
     if (size > 0) {
 	int index = (size == 1) ? 0 : random(size);
-	coords tile = available_rare_tiles[index];
+	coords tile = filtered_rare_tiles[index];
 	print("Looking for rare tile at " + tile);
 	return tile.minute;
     }
@@ -747,10 +883,14 @@ coords pick_coords_to_comb( int beach, sorted_beach_map map )
     // Remove already combed rares from consideration
     if (mode == "rare") {
 	coords_list combed = map["c"];
+	boolean refilter = false;
 	foreach key, c in known_rares {
 	    if (combed contains key) {
-		remove_rare_tile(c);
+		refilter |= remove_rare_tile(c, true);
 	    }
+	}
+	if (refilter) {
+	    filter_rare_tiles(true);
 	}
     }
 
@@ -871,22 +1011,24 @@ void beach_completed()
     if (mode == "rare") {
 	// If we've run out of rare tiles but were checking only the row
 	// next to the water, remove that limitation and recalculate.
-	if (tidal && available_rare_tiles.count() == 0) {
+	if (filtered_rare_tiles.count() == 0 && tidal) {
 	    tidal = false;
-	    current_tides = -1;
-	    repopulate_rare_tiles_map();
-	    check_tides(true);
-	    prepare_rare_tiles();
+	    filter_rare_tiles(true);
 	}
-	// If we've run out of unidentified rare tiles but were
+	// If we've run out of rare tiles but were checking unpublished
+	// rares, remove that limitation and recalculate.
+	if (filtered_rare_tiles.count() == 0 && unpublished) {
+	    unpublished = false;
+	    filter_rare_tiles(true);
+	}
+	// If we've run out of unverified rare tiles but were
 	// preferring those, remove that limitation and recalculate.
-	if (unverified && available_rare_tiles.count() == 0) {
+	if (filtered_rare_tiles.count() == 0 && unverified) {
 	    unverified = false;
-	    repopulate_rare_tiles_map();
-	    check_tides(true);
-	    prepare_rare_tiles();
+	    filter_rare_tiles(true);
 	}
-	if (available_rare_tiles.count() == 0) {
+	// If we've run out of rare tiles (inconceivable!), we're done
+	if (filtered_rare_tiles.count() == 0) {
 	    completed = true;
 	    return;
 	}
@@ -935,8 +1077,8 @@ buffer comb_beach( buffer page )
 
     // Now that we have the beach map, see how many rows are covered by waves
     if (mode == "rare" && check_tides(true)) {
-	// Recalculate available rare tiles
-	prepare_rare_tiles();
+	// Now that we know the tides, refilter available rare tiles
+	filter_rare_tiles(true);
     }
 
     // Save previously unseen sand castles
@@ -990,8 +1132,8 @@ buffer comb_beach( buffer page )
     remove unknowns[key];
 
     // Whether or not we found a rare tile, we may have tried to comb one.
-    if (mode == "rare") {
-	remove_rare_tile(c);
+    if (mode == "rare" && remove_rare_tile(c, type == "rare")) {
+	filter_rare_tiles(true);
     }
 
     // We don't intentionally farm more than once in a beach segment
@@ -1305,9 +1447,12 @@ void main(string... parameters )
 
     // If the user wants to comb rare tiles, set up helpful data structures
     if (mode == "rare") {
+	// Make a list of all currently known rare tiles
+	prepare_rare_tiles(true);
+	// Remove all which are currently under water
 	check_tides(true);
-	check_unverified(true);
-	prepare_rare_tiles();
+	// Apply filters and create a "filtered" list.
+	filter_rare_tiles(true);
     }
 
     try {
