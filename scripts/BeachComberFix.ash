@@ -7,7 +7,7 @@ coords_list uncommon;
 coords_list rare;
 coords_list unknown;
 
-void process_tile_data(string data)
+void process_tile_data(string log_date, string data)
 {
     if (data.length() == 0) {
 	return;
@@ -46,7 +46,7 @@ void process_tile_data(string data)
 	total++;
     }
     if (total > 0) {
-	print("Tiles found: " +
+	print(log_date + " Tiles found: " +
 	      commons + " common " +
 	      uncommons + " uncommon " +
 	      rares + " rare " +
@@ -141,6 +141,7 @@ void parse_parameters(string... parameters)
 
     boolean bogus = false;
     foreach n, param in parameters {
+	print(param);
 	switch (param) {
 	case "":
 	    continue;
@@ -196,15 +197,16 @@ void main(string date, string... parameters)
 	int now = now_to_int();
 	int current = date_to_timestamp("yyyyMMdd", date);
 	int millis = 24 * 60 * 60 * 1000;
+	int tomorrow = now + millis;
 
-	while (current < now) {
+	while (current < tomorrow) {
 	    string log_date = timestamp_to_date(current, "yyyyMMdd");
 	    string[] logs = session_logs(name, log_date, 0);
 
 	    // Process each log
 	    foreach n, log in logs {
 		// Process the data in it
-		process_tile_data(log);
+		process_tile_data(log_date, log);
 	    }
 	    current += millis;
 	}
@@ -219,6 +221,6 @@ void main(string date, string... parameters)
 
     // Prune existing data from the known data
     print();
-    prune_tile_data(false, save);
+    prune_tile_data(true, true);
     print_tile_summary("Pruned tile data");
 }

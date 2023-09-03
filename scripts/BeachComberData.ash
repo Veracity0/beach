@@ -143,6 +143,15 @@ coords_list copy(coords_list list)
     return result;
 }
 
+coords_list flatten(coords_list list)
+{
+    coords_list flat_list;
+    foreach key, tile in list {
+	flat_list[count(flat_list)] = tile;
+    }
+    return flat_list;
+}
+
 void add_tile(coords_list list, coords tile)
 {
     list[tile.to_key()] = tile;
@@ -547,7 +556,7 @@ void prune_tile_data(boolean verbose, boolean save)
 	    print("Not yet integrated rare tiles: " + new_new_count);
 	}
 
-	if (save && new_new_count < original_new_count) {
+	if (save) {
 	    save_tiles(rare_tiles_new, "tiles.rare.new.json");
 	}
     }
@@ -567,7 +576,7 @@ void prune_tile_data(boolean verbose, boolean save)
 	    print("Not yet integrated verified tiles: " + new_seen_count);
 	}
 
-	if (save && new_seen_count < original_seen_count) {
+	if (save) {
 	    save_tiles(rare_tiles_seen, "tiles.rare.seen.json");
 	}
     }
@@ -586,7 +595,7 @@ void prune_tile_data(boolean verbose, boolean save)
 	    print("Not yet integrated uncommon tiles: " + new_new_count);
 	}
 
-	if (save && new_new_count < original_new_count) {
+	if (save) {
 	    save_tiles(uncommon_tiles_new, "tiles.uncommon.new.json");
 	}
     }
@@ -605,8 +614,8 @@ void prune_tile_data(boolean verbose, boolean save)
 	    print("Not yet integrated sand castles: " + new_new_count);
 	}
 
-	if (save && new_new_count < original_new_count) {
-	    save_tiles(rare_tiles_seen, "tiles.castle.new.json");
+	if (save) {
+	    save_tiles(castle_tiles_new, "tiles.castle.new.json");
 	}
     }
 
