@@ -667,7 +667,7 @@ boolean filter_rare_tiles(boolean verbose)
     // If none, visit unverified rare tiles.
     // Otherwise, all rare tiles are game.
 
-    rare_tiles = available_rare_tiles.copy();
+    coords_list candidates = available_rare_tiles.copy();
 
     boolean filter_tides()
     {
@@ -698,15 +698,15 @@ boolean filter_rare_tiles(boolean verbose)
 	int dry = 0;
 	int kept = 0;
 
-	foreach key, coords in rare_tiles {
+	foreach key, coords in candidates {
 	    // This should be redundant; when we check the tides we already
 	    // pruned available_rare_tiles which are covered in water
 	    if (coords.row < wettest) {
 		covered++;
-		remove rare_tiles[key];
+		remove candidates[key];
 	    } else if (coords.row > wettest) {
 		dry++;
-		remove rare_tiles[key];
+		remove candidates[key];
 	    } else {
 		kept++;
 	    }
@@ -743,7 +743,7 @@ boolean filter_rare_tiles(boolean verbose)
 
 	coords_list available_new_tiles;
 	int kept = 0;
-	foreach key, coords in rare_tiles {
+	foreach key, coords in candidates {
 	    if (rare_tiles_new contains coords.to_key()) {
 		available_new_tiles.add_tile(coords);
 		kept++;
@@ -756,7 +756,7 @@ boolean filter_rare_tiles(boolean verbose)
 	}
 
 	// If there are some available new tiles, that is the new filtered list
-	rare_tiles = available_new_tiles;
+	candidates = available_new_tiles;
 	if (verbose) {
 	    print(kept + " unpublished tiles are candidates for combing");
 	}
@@ -775,11 +775,11 @@ boolean filter_rare_tiles(boolean verbose)
 
 	int verified = 0;
 	int kept = 0;
-	foreach key, coords in rare_tiles {
+	foreach key, coords in candidates {
 	    if (rare_tiles_verified contains coords.to_key() ||
 		rare_tiles_seen contains coords.to_key()) {
 		verified++;
-		remove rare_tiles[key];
+		remove candidates[key];
 	    } else {
 		kept++;
 	    }
@@ -798,7 +798,7 @@ boolean filter_rare_tiles(boolean verbose)
 
     // Return true if any filter removed tiles.
     boolean filtered =  filter_tides() || filter_published() || filter_unverified();
-    filtered_rare_tiles = rare_tiles.flatten();
+    filtered_rare_tiles = candidates.flatten();
     return filtered;
 }
 
