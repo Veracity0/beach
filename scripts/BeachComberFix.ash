@@ -106,6 +106,32 @@ void print_help()
     print(spaces + "save - after scraping tiles and pruning, save results.");
 }
 
+boolean is_valid_date(string date)
+{
+    matcher m = create_matcher("(\\d{4})(\\d{2})(\\d{2})", date);
+    if (!m.find()) {
+	print("date must be formatted as YYYYMMDD", "red");
+	return false;
+    }
+    int year = m.group(1).to_int();
+    // BeachComber started collecting data in 2023. Do we care?
+    if (year < 2023) {
+	print("BeachComber started comllecting data in 2023; no need to process earlier logs", "red");
+	return false;
+    }
+    int month = m.group(2).to_int();
+    if (month < 1 || month > 12) {
+	print("month must be from 1 - 12", "red");
+	return false;
+    }
+    int day = m.group(3).to_int();
+    if (day < 1 || day > 31) {
+	print("day must be from 1 - 31", "red");
+	return false;
+    }
+    return true;
+}
+
 void parse_parameters(string... parameters)
 {
     void load_players()
@@ -141,6 +167,10 @@ void parse_parameters(string... parameters)
 
     boolean bogus = false;
     foreach n, param in parameters {
+	// Skip the date
+	if (n == 0) {
+	    continue;
+	}
 	print(param);
 	switch (param) {
 	case "":
@@ -171,17 +201,23 @@ void parse_parameters(string... parameters)
     load_players();
 }
 
-void main(string date, string... parameters)
+void main(string... parameters)
 {
-    if (date == "help") {
-	print_help();
-	exit;
-    }
-
     // Parameters are optional. Depending on how the script is invoked,
     // there may be a single string with space-separated keywords, or
     // multiple strings. Whichever, turn into an array of keywords.
     string[] params = parameters.join_strings(" ").split_string(" ");
+
+    if (params.count() == 0 || params[0] == "help") {
+	print_help();
+	exit;
+    }
+
+    string date = params[0];
+    if (!date.is_valid_date()) {
+	// Error message already printed
+	exit;
+    }
 
     // Parse parameters, if any. Do it before validating the
     // configuration, since parameters can override properties.
@@ -221,6 +257,6 @@ void main(string date, string... parameters)
 
     // Prune existing data from the known data
     print();
-    prune_tile_data(true, true);
+    prune_tile_data(true, save);
     print_tile_summary("Pruned tile data");
 }
