@@ -1,6 +1,110 @@
 import <BeachComberJSON.ash>;
 
 // ***************************
+//          Beaches          *
+// ***************************
+
+// Wandering from 1 to 10,000 "minutes" down the beach gives a distinct
+// 100 by 100 section. (Considering that there are 60 * 24 = 1440 minutes
+// in an Earth day, KoL is playing rather loosely with its nomenclature;
+// 10,000 minutes is almost 7 days.)
+//
+// This means that there are 10,000 * 10 * 10 = 1,000,000 different squares,
+// or "tiles", as various Beach Combing scripts, refer to them.
+//
+// We'll refer to "a section found by wandering NNNN minutes down the beach"
+// as simply "a beach". In particular, "beach #NNNN".
+
+typedef int beach;
+typedef boolean[beach] beach_set;
+typedef beach[int] beach_list;
+
+// If you want to use "contains" with a beach #, the beach_set is your daa structure.
+// However, a beach_list (essentially, an array) is  the external format.
+beach_set to_beach_set( beach_list list )
+{
+    beach_set result;
+    foreach key, b in list {
+	result[b] = true;
+    }
+    return result;
+}
+
+// Adds to the end.
+void add_beach(beach_list list, beach b)
+{
+    list[count(list)] = b;
+}
+
+void add_beach(beach_set set, beach b)
+{
+    set[b] = true;
+}
+
+void add_beaches(beach_set set, beach_list list)
+{
+    foreach key, b in list {
+	set.add_beach(b);
+    }
+}
+
+void remove_beaches(beach_set set, beach_list list)
+{
+    foreach key, b in list {
+	remove set[b];
+    }
+}
+
+// If you have modified your set, put it into the external format.
+beach_list to_beach_list( beach_set set )
+{
+    beach_list result;
+    foreach b in set {
+	result[count(result)] = b;
+    }
+    return result;
+}
+
+// A beach_list is sortable, since the actual data is in the value.
+// If you don't want to munge an existing list, make a copy of it.
+beach_list copy( beach_list list )
+{
+    beach_list result;
+    foreach n, b in list {
+	result[n] = b;
+    }
+    return result;
+}
+
+// And here are the import/export function for the external format: a
+// JSON array.  Since it is just a list of ints, it could be more
+// compact, but for human readability, we'll put 1 beach per line.
+
+buffer beach_list_to_json( beach_list list )
+{
+    buffer buf = "[";
+    foreach key, b in list {
+	if (key > 0) {
+	    buf.append(",");
+	}
+	buf.append("\n  ");
+	buf.append(b.to_string());
+    }
+    buf.append("\n]\n");
+    return buf;
+}
+
+beach_list json_to_beach_list( buffer json )
+{
+    beach_list result;
+    int_array array = parse_json_int_array(json);
+    foreach n, value in array {
+	result[count(result)] = value;
+    }
+    return result;
+}
+
+// ***************************
 //        Coordinates        *
 // ***************************
 
@@ -19,8 +123,9 @@ import <BeachComberJSON.ash>;
 //  3  x  x  x  x  x  x  x  x  x  x
 //  2  x  x  x  x  x  x  x  x  x  x
 // (1) wave washed squares
-// 
-// The number of rows on the beach changes from day to day. Tides?
+//
+// Tides are cyclical and have an 8-day cycle:
+// 0, 1, 2, 3, 4, 3, 2, 1, ...
 //
 // Coordinates: <row>,(<minute>*10-<column>)
 //
@@ -182,7 +287,7 @@ void remove_tiles(coords_list list, coords_list tiles)
 
 // A Map that lets you look up tiles by # of minutes down the beach.
 
-typedef coords_list[int] coords_map;
+typedef coords_list[beach] coords_map;
 
 void add_tile(coords_map map, coords c)
 {
@@ -222,10 +327,19 @@ void remove_tiles(coords_map map, coords_list list)
     }
 }
 
+beach_set to_beach_set(coords_map map)
+{
+    beach_set result;
+    foreach minutes, list in map {
+	result[minutes] = true;
+    }
+    return result;
+}
+
 coords_list to_coords_list(coords_map map)
 {
     coords_list result;
-    foreach beach, list in map {
+    foreach minutes, list in map {
 	foreach key, tile in list {
 	    result[key] = tile;
 	}
@@ -236,7 +350,7 @@ coords_list to_coords_list(coords_map map)
 coords_list flatten(coords_map map)
 {
     coords_list flat_list;
-    foreach beach, list in map {
+    foreach minutes, list in map {
 	foreach key, tile in list {
 	    flat_list[count(flat_list)] = tile;
 	}
@@ -274,12 +388,16 @@ static coords_list uncommon_tiles_new;	// tiles.uncommon.new.json
 
 // All uncommon tiles = uncommon_tiles + uncommon_tiles_new
 
-// (published) Sand castles discovered by community spading
-static coords_list castle_tiles;	// tiles.castle.json
-// (local) Sand castles not in castle_tiles
-static coords_list castle_tiles_new;	// tiles.castle.new.json
+// (published) Sand castle beachs discovered by community spading
+static beach_list castle_beaches;	// beaches.castle.json
+// (local) Sand castles not in castle_beaches
+static beach_list castle_beaches_seen;	// beaches.castle.seen.json
 
-// All sand castle tiles = castle_tiles + castle_tiles_new
+// All sand castle beaches = castle_beaches + castle_beaches_seen
+
+// (published) Sand castle beachs decoded using Wiki's algorithm.
+// The starting (highest) beach is #9375
+static beach_list castle_beaches_wiki;	// beaches.castle.wiki.json
 
 // (local) The last segment of the beach that we have looked at and started combing.
 static int spade_last_minutes;		// spade.minutes.txt
@@ -288,7 +406,7 @@ coords_map twinkles_map;
 coords_map rare_tiles_map;
 coords_map verified_tiles_map;
 coords_map uncommon_tiles_map;
-coords_map castle_tiles_map;
+beach_set castle_beach_set;
 
 // ***************************
 //         JSON format       *
@@ -367,27 +485,44 @@ void save_tiles(coords_list data, string filename)
     data.coords_list_to_json().buffer_to_file(beach_file(filename));
 }
 
+beach_list load_beaches(string filename)
+{
+    return file_to_buffer(beach_file(filename)).json_to_beach_list();
+}
+
+void save_beaches(beach_list data, string filename)
+{
+    print("beach list '" + filename + "' has " + count(data) +" beaches");
+    data.beach_list_to_json().buffer_to_file(beach_file(filename));
+}
+
 // ***************************
 //            Files          *
 // ***************************
 
 void populate_tile_maps(boolean verbose)
 {
+    twinkles_map.clear();
     twinkles_map.add_tiles(twinkle_tiles);
+    rare_tiles_map.clear();
     rare_tiles_map.add_tiles(rare_tiles);
     rare_tiles_map.add_tiles(rare_tiles_new);
     rare_tiles_map.remove_tiles(rare_tiles_errors);
+    verified_tiles_map.clear();
     verified_tiles_map.add_tiles(rare_tiles_verified);
     verified_tiles_map.add_tiles(rare_tiles_seen);
+    uncommon_tiles_map.clear();
     uncommon_tiles_map.add_tiles(uncommon_tiles);
     uncommon_tiles_map.add_tiles(uncommon_tiles_new);
-    castle_tiles_map.add_tiles(castle_tiles);
-    castle_tiles_map.add_tiles(castle_tiles_new);
+    castle_beach_set.clear();
+    castle_beach_set.add_beaches(castle_beaches);
+    castle_beach_set.add_beaches(castle_beaches_seen);
 
     if (verbose) {
 	print("Beaches with rare tiles: " + count(rare_tiles_map));
+	print("Beaches with verified rare tiles: " + count(verified_tiles_map));
 	print("Beaches with uncommon tiles: " + count(uncommon_tiles_map));
-	print("Beaches with sand castles: " + count(castle_tiles_map));
+	print("Beaches with sand castles: " + count(castle_beach_set));
 	print("Beaches with unvisited twinkles: " + count(twinkles_map));
 	print();
     }
@@ -403,8 +538,9 @@ boolean load_tile_data(boolean verbose)
     rare_tiles_seen = load_tiles("tiles.rare.seen.json");
     uncommon_tiles = load_tiles("tiles.uncommon.json");
     uncommon_tiles_new = load_tiles("tiles.uncommon.new.json");
-    castle_tiles = load_tiles("tiles.castle.json");
-    castle_tiles_new = load_tiles("tiles.castle.new.json");
+    castle_beaches = load_beaches("beaches.castle.json");
+    castle_beaches_seen = load_beaches("beaches.castle.seen.json");
+    castle_beaches_wiki = load_beaches("beaches.castle.wiki.json");
 
     spade_last_minutes = file_to_buffer(beach_file("spade.minutes.txt")).to_string().to_int();
 
@@ -417,8 +553,8 @@ boolean load_tile_data(boolean verbose)
 	print("Not previously verified rare tiles: " + count(rare_tiles_seen));
 	print("Known uncommon tiles: " + count(uncommon_tiles));
 	print("New uncommon tiles: " + count(uncommon_tiles_new));
-	print("Known sand castles: " + count(castle_tiles));
-	print("New sand castles: " + count(castle_tiles_new));
+	print("Known sand castle beaches: " + count(castle_beaches));
+	print("New sand castle beaches: " + count(castle_beaches_seen));
 	print("Last minutes down the beach spaded: " + spade_last_minutes);
 	print();
     }
@@ -435,7 +571,8 @@ void save_tile_data()
     save_tiles(rare_tiles_errors, "tiles.rare.errors.json");
     save_tiles(rare_tiles_seen, "tiles.rare.seen.json");
     save_tiles(uncommon_tiles_new, "tiles.uncommon.new.json");
-    save_tiles(castle_tiles_new, "tiles.castle.new.json");
+    sort castle_beaches_seen by value;
+    save_beaches(castle_beaches_seen, "beaches.castle.seen.json");
 
     buffer spade_minutes = to_string(spade_last_minutes);
     buffer_to_file(spade_minutes, beach_file("spade.minutes.txt"));
@@ -471,12 +608,10 @@ void merge_tile_data(boolean verbose)
 	    print("Merged verified tiles: " + merged_verified_count);
 	}
 
-	if (known_verified_count < merged_verified_count) {
-	    rare_tiles_verified = merged_verified_tiles;
-	    rare_tiles_seen.clear();
-	    save_tiles(rare_tiles_verified, "tiles.rare.verified.json");
-	    save_tiles(rare_tiles_seen, "tiles.rare.seen.json");
-	}
+	rare_tiles_verified = merged_verified_tiles;
+	rare_tiles_seen.clear();
+	save_tiles(rare_tiles_verified, "tiles.rare.verified.json");
+	save_tiles(rare_tiles_seen, "tiles.rare.seen.json");
     }
 
     void merge_uncommon_tiles()
@@ -497,44 +632,40 @@ void merge_tile_data(boolean verbose)
 	    print("Merged uncommon tiles: " + merged_uncommon_count);
 	}
 
-	if (known_uncommon_count < merged_uncommon_count) {
-	    uncommon_tiles = merged_uncommon_tiles;
-	    uncommon_tiles_new.clear();
-	    save_tiles(uncommon_tiles, "tiles.uncommon.json");
-	    save_tiles(uncommon_tiles_new, "tiles.uncommon.new.json");
-	}
+	uncommon_tiles = merged_uncommon_tiles;
+	uncommon_tiles_new.clear();
+	save_tiles(uncommon_tiles, "tiles.uncommon.json");
+	save_tiles(uncommon_tiles_new, "tiles.uncommon.new.json");
     }
 
-    void merge_castle_tiles()
+    void merge_castle_beaches()
     {
-	// Sand Castle tiles
-	castle_tiles_map.clear();
-	castle_tiles_map.add_tiles(castle_tiles);
-	castle_tiles_map.add_tiles(castle_tiles_new);
-	coords_list merged_castle_tiles = to_coords_list(castle_tiles_map);
+	// Sand Castle beaches
+	castle_beach_set.clear();
+	castle_beach_set.add_beaches(castle_beaches);
+	castle_beach_set.add_beaches(castle_beaches_seen);
+	beach_list merged_castle_beaches = castle_beach_set;
 
-	int known_castle_count = count(castle_tiles);
-	int new_castle_count = count(castle_tiles_new);
-	int merged_castle_count = count(merged_castle_tiles);
+	int known_castle_beach_count = count(castle_beaches);
+	int new_castle_beach_count = count(castle_beaches_seen);
+	int merged_castle_beach_count = count(merged_castle_beaches);
 
 	if (verbose) {
-	    print("Known sand castle tiles: " + known_castle_count);
-	    print("New sand castle tiles: " + new_castle_count);
-	    print("Merged sand castle tiles: " + merged_castle_count);
+	    print("Known sand castle beaches: " + known_castle_beach_count);
+	    print("New sand castle beaches: " + new_castle_beach_count);
+	    print("Merged sand castle beaches: " + merged_castle_beach_count);
 	}
 
-	if (known_castle_count < merged_castle_count) {
-	    castle_tiles = merged_castle_tiles;
-	    castle_tiles_new.clear();
-	    save_tiles(castle_tiles, "tiles.castle.json");
-	    save_tiles(castle_tiles_new, "tiles.castle.new.json");
-	}
+	castle_beaches = merged_castle_beaches;
+	castle_beaches_seen.clear();
+	save_beaches(castle_beaches, "beaches.castle.json");
+	save_beaches(castle_beaches_seen, "beaches.castle.seen.json");
     }
 
     merge_rare_tiles();
     merge_verified_tiles();
     merge_uncommon_tiles();
-    merge_castle_tiles();
+    merge_castle_beaches();
 }
 
 // For pruning published tile data from your locally discovered tile data.
@@ -600,27 +731,32 @@ void prune_tile_data(boolean verbose, boolean save)
 	}
     }
 
-    void prune_castle_tiles()
+    void prune_castle_beaches()
     {
 	// Sand castle tiles
-	int known_castle_count = count(castle_tiles);
-	int original_new_count = count(castle_tiles_new);
-	castle_tiles_new.remove_tiles(castle_tiles);
-	int new_new_count = count(castle_tiles_new);
+	int known_castle_beach_count = count(castle_beaches);
+	// It's a lot easier to remove a beach from a map than a list with an unknown key
+	// ASH will auto-coerce between a beach_list and a beach_set
+	// (in either direction) using to_beach_set() and to_beach_list()
+	beach_set castle_beaches_seen_set = castle_beaches_seen;
+	int original_seen_beach_count = count(castle_beaches_seen_set);
+	castle_beaches_seen_set.remove_beaches(castle_beaches);
+	castle_beaches_seen = castle_beaches_seen_set;
+	int new_seen_beach_count = count(castle_beaches_seen);
 
 	if (verbose) {
-	    print("Known sand castles: " + known_castle_count);
-	    print("Locally discovered sand castles tiles: " + original_new_count);
-	    print("Not yet integrated sand castles: " + new_new_count);
+	    print("Known sand castle beaches: " + known_castle_beach_count);
+	    print("Locally seen sand castles beaches: " + original_seen_beach_count);
+	    print("Not yet integrated sand castle beaches: " + new_seen_beach_count);
 	}
 
 	if (save) {
-	    save_tiles(castle_tiles_new, "tiles.castle.new.json");
+	    save_beaches(castle_beaches_seen, "beaches.castle.seen.json");
 	}
     }
 
     prune_rare_tiles();
     prune_verified_tiles();
     prune_uncommon_tiles();
-    prune_castle_tiles();
+    prune_castle_beaches();
 }
