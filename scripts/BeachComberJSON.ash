@@ -1,5 +1,6 @@
 typedef string[string] json_object;
 typedef json_object[int] json_array;
+typedef int[int] int_array;
 
 // This is really simple minded, but adequate for the needs of BeachComber.
 //
@@ -46,6 +47,21 @@ json_array parse_json_array(string json)
     while (omatcher.find()) {
 	json_object object = parse_json_object(omatcher.group(0));
 	result[count(result)] = object;
+    }
+    return result;
+}
+
+int_array parse_json_int_array(string json)
+{
+    int_array result;
+    matcher amatcher = create_matcher("\\[(.+)\\]", json);
+    if (!amatcher.find()) {
+	return result;
+    }
+    matcher imatcher = create_matcher("(\\d+)", amatcher.group(1));
+    while (imatcher.find()) {
+	int value = to_int(imatcher.group(0));
+	result[count(result)] = value;
     }
     return result;
 }
