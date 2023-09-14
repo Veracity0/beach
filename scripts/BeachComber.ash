@@ -161,7 +161,7 @@ void print_help()
 string mode = "rare";
 string strategy = "known";
 int turns = 0;
-int beach = 0;
+beach minutes = 0;
 boolean tidal = false;
 boolean unpublished = false;
 boolean unverified = false;
@@ -256,13 +256,13 @@ void parse_parameters(string... parameters)
 	    // twinkles, limited by the specified number of turns, if any.
 	    int index = param.index_of("=");
 	    string value = param.substring(index + 1);
-	    beach = value.is_integer() ? value.to_int() : 0;
-	    if (beach == 0) {
+	    minutes = value.is_integer() ? value.to_int() : 0;
+	    if (minutes == 0) {
 		print("How many minutes?", "red");
 		bogus = true;
 		continue;
 	    }
-	    if (beach < 1 || beach > 10000) {
+	    if (minutes < 1 || minutes > 10000) {
 		print("You can wander from 1 to 10000 minutes down the beach.", "red");
 		bogus = true;
 		continue;
@@ -839,7 +839,7 @@ int next_rare_beach()
     return 0;
 }
 
-static coords IMPOSSIBLE = new coords(beach, 10, 0);
+static coords IMPOSSIBLE = new coords(minutes, 10, 0);
 
 coords pick_coords_to_comb( int beach, sorted_beach_map map )
 {
@@ -1003,7 +1003,7 @@ void beach_completed()
     current_beach = 0;
 
     // If we are exploring a single square, we're done.
-    if (beach != 0) {
+    if (minutes != 0) {
 	completed = true;
 	return;
     }
@@ -1071,9 +1071,9 @@ buffer comb_beach( buffer page )
     }
 
     // We depend on KoLmafia to parse the page into properties
-    int beach = get_minutes();
+    int minutes = get_minutes();
     beach_layout layout = get_beach_layout();
-    sorted_beach_map map = sort_beach( beach, layout );
+    sorted_beach_map map = sort_beach( minutes, layout );
 
     // Now that we have the beach map, see how many rows are covered by waves
     if (mode == "rare" && check_tides(true)) {
@@ -1082,8 +1082,12 @@ buffer comb_beach( buffer page )
     }
 
     // Save previously unseen sand castles
-    coords_list unknown_castles = unknown_tiles( beach, map["C"], castle_tiles_map );
-    castle_tiles_new.add_tiles(unknown_castles);
+    if (count(map["C"]) > 0 && !(castle_beach_set contains minutes)) {
+	// Add to the end of the list of seen beaches with a sand castle
+	castle_beaches_seen.add_beach(minutes);
+	// Keep list in numerical order
+	sort castle_beaches_seen by value;
+    }
 
     // Inspect the layout and find all squares with twinkles.
     // (Or a whale)
@@ -1092,10 +1096,10 @@ buffer comb_beach( buffer page )
     twinkles.add_tiles(map["t"]);
 
     // Save previously unvisited twinkles
-    coords_list unknowns = unknown_twinkles( beach, twinkles );
+    coords_list unknowns = unknown_twinkles( minutes, twinkles );
     twinkle_tiles.add_tiles(unknowns);
 
-    coords c = pick_coords_to_comb( beach, map );
+    coords c = pick_coords_to_comb( minutes, map );
     string type = code_to_type[ square_at( layout, c ) ];
 
     // Check if this was a special square
@@ -1204,9 +1208,9 @@ buffer comb_beach( buffer page )
     return page;
 }
 
-buffer comb_specific_beach( int beach )
+buffer comb_specific_beach( int minutes )
 {
-    buffer page = run_choice( 1, "minutes=" + beach );
+    buffer page = run_choice( 1, "minutes=" + minutes );
     current_beach = get_minutes();
     return comb_beach( page );
 }
@@ -1256,7 +1260,7 @@ buffer comb_next_beach()
 	page = comb_specific_beach( spade_last_minutes + 1 );
 	break;
     case "beach":
-	page = comb_specific_beach( beach );
+	page = comb_specific_beach( minutes );
 	break;
     }
 
