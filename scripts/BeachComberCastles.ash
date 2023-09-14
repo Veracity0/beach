@@ -2,7 +2,7 @@ since r27551;
 
 import <BeachComberData.ash>
 
-load_tile_data(true);
+load_tile_data(false);
 
 beach_list castles = castle_beach_set;
 
@@ -115,7 +115,7 @@ print("There are " + count(derived_castles) + " castles encoding the puzzle hint
 //      Castle Decoding      *
 // ***************************
 
-string decode_castles(beach_list input)
+string decode_castles(beach_list input, int skip)
 {
     beach_list beaches = copy(input);
     sort beaches by -value;
@@ -168,6 +168,9 @@ string decode_castles(beach_list input)
     // interval, clear the code, and append "?" to the message.
 
     foreach key, minutes in beaches {
+	if (skip-- > 0) {
+	    continue;
+	}
 	if (current != 0) {
 	    int interval = current - minutes;
 	    if (interval % 11 != 0) {
@@ -178,7 +181,8 @@ string decode_castles(beach_list input)
 		print(current + "-" + minutes + "=" + interval);
 		message.append("?");
 		code.set_length(0);
-		break;
+		current = minutes;
+		continue;
 	    }
 	    switch (interval) {
 	    case 11:
@@ -204,7 +208,7 @@ string decode_castles(beach_list input)
 }
 
 print("Encoded message = '" + decoded_message + "'");
-print("Decoded message = '" + decode_castles(derived_castles) + "'");
+print("Decoded message = '" + decode_castles(derived_castles, 0) + "'");
 
 // ***************************
 //         Missing Castles   *
@@ -215,8 +219,12 @@ print("Decoded message = '" + decode_castles(derived_castles) + "'");
 // -> any castle < 3853 is for fun, but not part of the hint.
 //
 // Which castles are we missing from the encoded beaches?
-beach_set missing_castles = derived_castles;
-missing_castles.remove_beaches(castles);
 
-print("There are " + count(missing_castles) + " hint castles that we have not seen yet");
-print("Decoded message from observed castles = '" + decode_castles(castles) + "'");
+void main(int... params) {
+    int skip = count(params) > 0 ? params[0] : 0;
+    beach_set missing_castles = derived_castles;
+    missing_castles.remove_beaches(castles);
+
+    print("There are " + count(missing_castles) + " hint castles that we have not seen yet");
+    print("Decoded message from observed castles = '" + decode_castles(castles, skip) + "'");
+}
