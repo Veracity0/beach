@@ -6,51 +6,99 @@ coords_list common;
 coords_list uncommon;
 coords_list rare;
 coords_list unknown;
+beach_set castle;
 
-void process_tile_data(string log_date, string data)
+void process_beach_entry(string log_date, string data)
 {
     if (data.length() == 0) {
 	return;
     }
 
-    // (7902,7,10) is an 'uncommon' tile.
-    matcher m = create_matcher("\\((\\d+),(\\d+),(\\d+)\\) is an? '(.*?)' tile", data);
-    int commons, uncommons, rares, unknowns, total;
-    while (m.find()) {
-	int minutes = m.group(1).to_int();
-	int row = m.group(2).to_int();
-	int column = m.group(3).to_int();
-	string type = m.group(4);
-	coords tile = new coords(minutes, row, column-1);
-	switch (type) {
-	case "common":
-	    common.add_tile(tile);
-	    commons++;
-	    break;
-	case "uncommon":
-	    uncommon.add_tile(tile);
-	    uncommons++;
-	    break;
-	case "rare":
-	    rare.add_tile(tile);
-	    rares++;
-	    break;
-	case "unknown":
-	    unknown.add_tile(tile);
-	    unknowns++;
-	    break;
-	default:
-	    print(m.group(0));
-	    break;
+    // [32167] Wandering 7149 minutes down the beach
+    // Encounter: Comb the Beach (7149 minutes down the beach)
+    // > 2 squares in beach 7149 contain a sand castle
+    // > 4 squares in beach 7149 contain combed sand
+    // > 63 squares in beach 7149 contain rough sand
+    // > 1 squares in beach 7149 contain rough sand with a twinkle
+    // > 670 rare tiles are too far from the water
+    // > 53 rare tiles are candidates for combing
+    // > Combing the square at coordinates (7149,8,1) which contains rough sand with a twinkle
+    // Combing square 8,1 (7149 minutes down the beach)
+    // You acquire an item: sand dollar
+    //> (7149,8,1) is an 'uncommon' tile.
+
+    // Ideally, I will match on "entries" like that and extract what I need.
+
+    // Count the beaches we visited in this log
+    beach_set visited_beaches;
+    // Beaches can contain multiple castles, but unique beaches matter
+    beach_set castle_beaches;
+    // Count tiles that we find on each beach
+    int commons, uncommons, rares, unknowns, castles, total;
+
+    void process_types()
+    {
+	// (7902,7,10) is an 'uncommon' tile.
+	matcher m = create_matcher("\\((\\d+),(\\d+),(\\d+)\\) is an? '(.*?)' tile", data);
+	while (m.find()) {
+	    int minutes = m.group(1).to_int();
+	    int row = m.group(2).to_int();
+	    int column = m.group(3).to_int();
+	    string type = m.group(4);
+	    coords tile = new coords(minutes, row, column-1);
+	    switch (type) {
+	    case "common":
+		common.add_tile(tile);
+		commons++;
+		break;
+	    case "uncommon":
+		uncommon.add_tile(tile);
+		uncommons++;
+		break;
+	    case "rare":
+		rare.add_tile(tile);
+		rares++;
+		break;
+	    case "unknown":
+		unknown.add_tile(tile);
+		unknowns++;
+		break;
+	    default:
+		print(m.group(0));
+		break;
+	    }
+	    total++;
 	}
-	total++;
     }
+
+    void process_castles()
+    {
+	// > 2 squares in beach 7149 contain a sand castle
+	matcher m = create_matcher("(\\d+) squares? in beach (\\d+) contain a sand castle", data);
+	while (m.find()) {
+	    int count =  m.group(1).to_int();
+	    int minutes = m.group(2).to_int();
+	    castle_beaches.add_beach(minutes);
+	    castle.add_beach(minutes);
+	    castles += count;
+	}
+    }
+
+    process_types();
+    process_castles();
+
     if (total > 0) {
-	print(log_date + " Tiles found: " +
+	print(log_date + " Tiles: " +
 	      commons + " common " +
 	      uncommons + " uncommon " +
 	      rares + " rare " +
-	      unknowns + " unknown." + " total = " + total);
+	      unknowns + " unknown." +
+	      " total = " + total);
+    }
+    if (count(castle_beaches) > 0) {
+	print(log_date + " Castles: " +
+	      count(castle_beaches) + " unique beaches contain " +
+	      castles + " sand castles.");
     }
 }
 
@@ -63,6 +111,10 @@ void print_new_data()
     print("uncommon: " + count(uncommon));
     print("rare: " + count(rare));
     print("unknown: " + count(unknown));
+    print();
+    print("Beaches processed");
+    print();
+    print("sand castles: " + count(castle));
 }
 
 void fix_tile_data()
@@ -75,6 +127,9 @@ void fix_tile_data()
 
     uncommon_tiles_new.clear();
     uncommon_tiles_new.add_tiles(uncommon);
+
+    castle_beaches_seen.clear();
+    castle_beaches_seen = castle;
 }
 
 void print_tile_summary(string header)
@@ -88,6 +143,8 @@ void print_tile_summary(string header)
     print("seen_rare_tiles: " + count(rare_tiles_seen));
     print("uncommon_tiles: " + count(uncommon_tiles));
     print("new uncommon_tiles: " + count(uncommon_tiles_new));
+    print("castle_beaches: " + count(castle_beaches));
+    print("castle_beaches_seen: " + count(castle_beaches_seen));
 }
 
 string[int] players;
@@ -171,7 +228,6 @@ void parse_parameters(string... parameters)
 	if (n == 0) {
 	    continue;
 	}
-	print(param);
 	switch (param) {
 	case "":
 	    continue;
@@ -242,7 +298,7 @@ void main(string... parameters)
 	    // Process each log
 	    foreach n, log in logs {
 		// Process the data in it
-		process_tile_data(log_date, log);
+		process_beach_entry(log_date, log);
 	    }
 	    current += millis;
 	}
