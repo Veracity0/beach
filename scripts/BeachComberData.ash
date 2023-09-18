@@ -492,7 +492,6 @@ beach_list load_beaches(string filename)
 
 void save_beaches(beach_list data, string filename)
 {
-    print("beach list '" + filename + "' has " + count(data) +" beaches");
     data.beach_list_to_json().buffer_to_file(beach_file(filename));
 }
 
