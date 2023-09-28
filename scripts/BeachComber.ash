@@ -1,4 +1,4 @@
-since r27551;
+since r27617;
 
 import <vprops.ash>;
 import <BeachComberData.ash>
@@ -158,6 +158,7 @@ void print_help()
 // As many turns as necessary will be used to comb all the "twinkle" tiles.
 // After that is completed, execution ends; we will not visit another section.
 
+boolean twinkle_vision = get_property("hasTwinkleVision").to_boolean();
 string mode = "rare";
 string strategy = "known";
 int turns = 0;
@@ -462,6 +463,7 @@ void save_visited_tile(coords tile, string tile_type) {
     case "uncommon":
 	// If we thought this was a rare tile, oops!
 	if (rare_tiles contains key) {
+	    print( "We thought tile " + tile + "was rare, but it is uncommon." );
 	    rare_tiles.remove_tile(tile);
 	    rare_tiles_errors.add_tile(tile);
 	} else if (uncommon_tiles contains key) {
@@ -473,6 +475,7 @@ void save_visited_tile(coords tile, string tile_type) {
     default:
 	// If we thought this was a rare tile, oops!
 	if (rare_tiles contains key) {
+	    print( "We thought tile " + tile + " was rare, but it is " + tile_type + "." );
 	    rare_tiles.remove_tile(tile);
 	    rare_tiles_errors.add_tile(tile);
 	}
@@ -802,22 +805,37 @@ boolean filter_rare_tiles(boolean verbose)
     return filtered;
 }
 
-boolean remove_rare_tile(coords c, boolean rare)
+void prune_known_rares( int beach, sorted_beach_map map )
 {
-    if (rare) {
-	// It is now combed sand.
-	rare_tiles_combed.add_tile(c);
-    }
-    // If we knew this was rare...
-    if (available_rare_tiles contains c.to_key()) {
-	// ... don't consider it again this session.
-	available_rare_tiles.remove_tile(c);
-	// The caller needs to refilter
-	return true;
+    // KoLmafia gives us the beach layout.
+    coords_list combed = map["c"];
+    coords_list rough = map["r"];
+
+    coords_list known_rares = rare_tiles_map[beach];
+    boolean refilter = false;
+
+    foreach key, c in known_rares {
+	// 1) If "combed", remove from consideration
+	if (combed contains key) {
+	    rare_tiles_combed.add_tile(c);
+	    available_rare_tiles.remove_tile(c);
+	    refilter = true;
+	}
+	// 2) If we have TwinkleVision™, "rough sand" is a false rare.
+	if (twinkle_vision && rough contains key) {
+	    // False rare. Add it to errors
+	    print( "We thought tile " + c + " was rare, but it is common." );
+	    available_rare_tiles.remove_tile(c);
+	    rare_tiles.remove_tile(c);
+	    rare_tiles_errors.add_tile(c);
+	    known_rares.remove_tile(c);
+	    refilter = true;
+	}
     }
 
-    // Otherwise, this was a new tile, and we don't need to refilter
-    return false;
+    if (refilter) {
+	filter_rare_tiles(true);
+    }
 }
 
 int next_rare_beach()
@@ -880,23 +898,12 @@ coords pick_coords_to_comb( int beach, sorted_beach_map map )
     coords_list known_rares = rare_tiles_map[beach];
     coords_list known_uncommons = uncommon_tiles_map[beach];
 
-    // Remove already combed rares from consideration
-    if (mode == "rare") {
-	coords_list combed = map["c"];
-	boolean refilter = false;
-	foreach key, c in known_rares {
-	    if (combed contains key) {
-		refilter |= remove_rare_tile(c, true);
-	    }
-	}
-	if (refilter) {
-	    filter_rare_tiles(true);
-	}
-    }
-
     // Look through currently twinkling tiles
     coords_list twinkles = map["t"];
     if (count(twinkles) > 0) {
+	// Our TwinkleVision™ kicked in.
+	twinkle_vision = true;
+
 	// 2) Look for a rare
 	foreach key, c in known_rares {
 	    if (twinkles contains key) {
@@ -1056,7 +1063,7 @@ buffer comb_square( coords c, string type )
 
 buffer comb_beach( buffer page )
 {
-    void save_page_html( coords c, buffer page )
+    void save_page_html( coords c )
     {
 	string filename =
 	    my_name() +
@@ -1099,6 +1106,10 @@ buffer comb_beach( buffer page )
     coords_list unknowns = unknown_twinkles( minutes, twinkles );
     twinkle_tiles.add_tiles(unknowns);
 
+    // Check known rares on this beach and remove if not available
+    prune_known_rares(minutes, map);
+
+    // Now pick a tile to comb
     coords c = pick_coords_to_comb( minutes, map );
     string type = code_to_type[ square_at( layout, c ) ];
 
@@ -1123,7 +1134,7 @@ buffer comb_beach( buffer page )
     }
 
     if ( special ) {
-	save_page_html( c, page );
+	save_page_html( c );
 	// For the above, log the page after combing, as well.
 	// special = false;
     }
@@ -1135,9 +1146,16 @@ buffer comb_beach( buffer page )
     remove twinkle_tiles[key];
     remove unknowns[key];
 
-    // Whether or not we found a rare tile, we may have tried to comb one.
-    if (mode == "rare" && remove_rare_tile(c, type == "rare")) {
-	filter_rare_tiles(true);
+    // If we were looking for rares and found one, update
+    if (mode == "rare" && type == "rare") {
+	rare_tiles_combed.add_tile(c);
+	// If we knew this was rare...
+	if (available_rare_tiles contains c.to_key()) {
+	    // ... don't consider it again this session.
+	    available_rare_tiles.remove_tile(c);
+	    // refilter
+	    filter_rare_tiles(true);
+	}
     }
 
     // We don't intentionally farm more than once in a beach segment
@@ -1202,7 +1220,7 @@ buffer comb_beach( buffer page )
     }
 
     if ( special ) {
-	save_page_html( c, page );
+	save_page_html( c );
     }
 
     return page;

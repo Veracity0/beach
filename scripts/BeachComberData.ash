@@ -585,7 +585,30 @@ void merge_tile_data(boolean verbose)
     void merge_rare_tiles()
     {
 	// Rare tiles
-	// *** later
+	// rare_tiles_map.clear();
+	// rare_tiles_map.add_tiles(rare_tiles);
+	// rare_tiles_map.add_tiles(rare_tiles_new);
+	// rare_tiles_map.remove_tiles(rare_tiles_errors);
+	// coords_list merged_rare_tiles = to_coords_list(rare_tiles_map);
+
+	// int known_rare_count = count(rare_tiles);
+	// int new_rare_count = count(rare_tiles_new);
+	// int errors_rare_count = count(rare_tiles_errors);
+	// int merged_rare_count = count(merged_rare_tiles);
+
+	// if (verbose) {
+	//     print("Rare tiles: " + known_rare_count);
+	//     print("Newly seen rare tiles: " + new_rare_count);
+	//     print("Erroneous rare tiles: " + errors_rare_count);
+	//     print("Merged rare tiles: " + merged_rare_count);
+	// }
+
+	// rare_tiles = merged_rare_tiles;
+	// save_tiles(rare_tiles, "tiles.rare.json");
+	// rare_tiles_new.clear();
+	// save_tiles(rare_tiles_new, "tiles.rare.new.json");
+	// rare_tiles_errors.clear();
+	// save_tiles(rare_tiles_errors, "tiles.rare.errors.json");
 	// save_tiles(rare_tiles, "tiles.rare.json");
     }
 
@@ -603,7 +626,7 @@ void merge_tile_data(boolean verbose)
 
 	if (verbose) {
 	    print("Verified rare tiles: " + known_verified_count);
-	    print("Newly seen rare tiles tiles: " + new_verified_count);
+	    print("Newly seen rare tiles: " + new_verified_count);
 	    print("Merged verified tiles: " + merged_verified_count);
 	}
 
