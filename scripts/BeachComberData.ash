@@ -568,7 +568,7 @@ boolean load_tile_data(boolean verbose)
     if (verbose) {
 	print("Known rare tiles: " + count(rare_tiles));
 	// The following may have already been merged
-	print("Locally discvered rare tiles: " + count(rare_tiles_new));
+	print("Locally discovered rare tiles: " + count(rare_tiles_new));
 	print("Erroneous rare tiles: " + count(rare_tiles_errors));
 	// Therefore, do not tally them.
 	// int total_rare = count(rare_tiles) + count(rare_tiles_new) - count(rare_tiles_errors);
