@@ -41,27 +41,49 @@ void add_beach(beach_set set, beach b)
     set[b] = true;
 }
 
-void add_beaches(beach_set set, beach_list list)
+void add_beaches(beach_set set, beach_list input)
 {
-    foreach key, b in list {
+    foreach key, b in input {
 	set.add_beach(b);
     }
 }
 
-void remove_beaches(beach_set set, beach_list list)
+void add_beaches(beach_set set, beach_set input)
 {
-    foreach key, b in list {
+    foreach b in input {
+	set.add_beach(b);
+    }
+}
+
+void remove_beaches(beach_set set, beach_list input)
+{
+    foreach key, b in input {
 	remove set[b];
     }
 }
 
-// If you have modified your set, put it into the external format.
+void remove_beaches(beach_set set, beach_set input)
+{
+    foreach b in input {
+	remove set[b];
+    }
+}
+
+// Put a beach_set into the external format.
 beach_list to_beach_list( beach_set set )
 {
     beach_list result;
     foreach b in set {
 	result[count(result)] = b;
     }
+    return result;
+}
+
+// Make a copy of a beach_set so you can modify it and leave it untouched.
+beach_set to_beach_set( beach_set set )
+{
+    beach_set result;
+    result.add_beaches(set);
     return result;
 }
 
@@ -388,14 +410,14 @@ static coords_list uncommon_tiles_new;	// tiles.uncommon.new.json
 
 // All uncommon tiles = uncommon_tiles + uncommon_tiles_new
 
-// (published) Sand castle beachs discovered by community spading
+// (published) Sand castle beaches discovered by community spading
 static beach_list castle_beaches;	// beaches.castle.json
 // (local) Sand castles not in castle_beaches
 static beach_list castle_beaches_seen;	// beaches.castle.seen.json
 
 // All sand castle beaches = castle_beaches + castle_beaches_seen
 
-// (published) Sand castle beachs decoded using Wiki's algorithm.
+// (published) Sand castle beaches decoded using Wiki's algorithm.
 // The starting (highest) beach is #9375
 static beach_list castle_beaches_wiki;	// beaches.castle.wiki.json
 
@@ -544,16 +566,28 @@ boolean load_tile_data(boolean verbose)
     spade_last_minutes = file_to_buffer(beach_file("spade.minutes.txt")).to_string().to_int();
 
     if (verbose) {
-	print("Unvisited twinkle tiles: " + count(twinkle_tiles));
 	print("Known rare tiles: " + count(rare_tiles));
+	// The following may have already been merged
+	print("Locally discvered rare tiles: " + count(rare_tiles_new));
 	print("Erroneous rare tiles: " + count(rare_tiles_errors));
-	print("New rare tiles: " + count(rare_tiles_new));
+	// Therefore, do not tally them.
+	// int total_rare = count(rare_tiles) + count(rare_tiles_new) - count(rare_tiles_errors);
+	// print("Total: " + total_rare);
+	print();
 	print("Verified rare tiles: " + count(rare_tiles_verified));
-	print("Not previously verified rare tiles: " + count(rare_tiles_seen));
+	print("Newly verified rare tiles: " + count(rare_tiles_seen));
+	int total_verified = count(rare_tiles_verified) + count(rare_tiles_seen);
+	print("Total: " + total_verified);
+	print();
 	print("Known uncommon tiles: " + count(uncommon_tiles));
 	print("New uncommon tiles: " + count(uncommon_tiles_new));
+	int total_uncommon = count(uncommon_tiles) + count(uncommon_tiles_new);
+	print("Total: " + total_uncommon);
+	print();
 	print("Known sand castle beaches: " + count(castle_beaches));
 	print("New sand castle beaches: " + count(castle_beaches_seen));
+	print();
+	print("Unvisited twinkle tiles: " + count(twinkle_tiles));
 	print("Last minutes down the beach spaded: " + spade_last_minutes);
 	print();
     }
@@ -585,36 +619,39 @@ void merge_tile_data(boolean verbose)
     void merge_rare_tiles()
     {
 	// Rare tiles
-	// rare_tiles_map.clear();
-	// rare_tiles_map.add_tiles(rare_tiles);
-	// rare_tiles_map.add_tiles(rare_tiles_new);
-	// rare_tiles_map.remove_tiles(rare_tiles_errors);
-	// coords_list merged_rare_tiles = to_coords_list(rare_tiles_map);
+	rare_tiles_map.clear();
+	rare_tiles_map.add_tiles(rare_tiles);
+	rare_tiles_map.add_tiles(rare_tiles_new);
+	rare_tiles_map.remove_tiles(rare_tiles_errors);
+	coords_list merged_rare_tiles = to_coords_list(rare_tiles_map);
 
-	// int known_rare_count = count(rare_tiles);
-	// int new_rare_count = count(rare_tiles_new);
-	// int errors_rare_count = count(rare_tiles_errors);
-	// int merged_rare_count = count(merged_rare_tiles);
+	int known_rare_count = count(rare_tiles);
+	int new_rare_count = count(rare_tiles_new);
+	int errors_rare_count = count(rare_tiles_errors);
+	int merged_rare_count = count(merged_rare_tiles);
 
-	// if (verbose) {
-	//     print("Rare tiles: " + known_rare_count);
-	//     print("Newly seen rare tiles: " + new_rare_count);
-	//     print("Erroneous rare tiles: " + errors_rare_count);
-	//     print("Merged rare tiles: " + merged_rare_count);
-	// }
+	if (verbose) {
+	    print("Known rare tiles: " + known_rare_count);
+	    print("Discovered rare tiles: " + new_rare_count);
+	    print("Erroneous rare tiles: " + errors_rare_count);
+	    print("Merged rare tiles: " + merged_rare_count);
+	}
 
-	// rare_tiles = merged_rare_tiles;
-	// save_tiles(rare_tiles, "tiles.rare.json");
+	rare_tiles = merged_rare_tiles;
+	save_tiles(rare_tiles, "tiles.rare.json");
+
+	// Preserve new rare and erroneous rare counts.
+	// They are the "important" spading results.
+	//
 	// rare_tiles_new.clear();
 	// save_tiles(rare_tiles_new, "tiles.rare.new.json");
 	// rare_tiles_errors.clear();
 	// save_tiles(rare_tiles_errors, "tiles.rare.errors.json");
-	// save_tiles(rare_tiles, "tiles.rare.json");
     }
 
     void merge_verified_tiles()
     {
-	// Verfied tiles
+	// Verified rare tiles
 	verified_tiles_map.clear();
 	verified_tiles_map.add_tiles(rare_tiles_verified);
 	verified_tiles_map.add_tiles(rare_tiles_seen);

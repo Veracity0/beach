@@ -6,6 +6,9 @@ coords_list common;
 coords_list uncommon;
 coords_list rare;
 coords_list unknown;
+
+// Beaches can contain multiple castles, but unique beaches matter,
+// not the coordinates of individual beach tiles
 beach_set castle;
 
 void process_beach_entry(string log_date, string data)
@@ -31,8 +34,6 @@ void process_beach_entry(string log_date, string data)
 
     // Count the beaches we visited in this log
     beach_set visited_beaches;
-    // Beaches can contain multiple castles, but unique beaches matter
-    beach_set castle_beaches;
     // Count tiles that we find on each beach
     int commons, uncommons, rares, unknowns, castles, total;
 
@@ -78,7 +79,6 @@ void process_beach_entry(string log_date, string data)
 	while (m.find()) {
 	    int count =  m.group(1).to_int();
 	    int minutes = m.group(2).to_int();
-	    castle_beaches.add_beach(minutes);
 	    castle.add_beach(minutes);
 	    castles += count;
 	}
@@ -95,9 +95,9 @@ void process_beach_entry(string log_date, string data)
 	      unknowns + " unknown." +
 	      " total = " + total);
     }
-    if (count(castle_beaches) > 0) {
+    if (count(castle) > 0) {
 	print(log_date + " Castles: " +
-	      count(castle_beaches) + " unique beaches contain " +
+	      count(castle) + " unique beaches contain " +
 	      castles + " sand castles.");
     }
 }
@@ -115,6 +115,39 @@ void print_new_data()
     print("Beaches processed");
     print();
     print("sand castles: " + count(castle));
+}
+
+void print_castle_beaches()
+{
+    // castle is the beach_set of castles we saw
+    // Make a beach_list from it.
+    beach_list seen_castle_beaches = castle;
+
+    // castle_beaches_wiki is the beach_set of derived beaches
+    // Make a beach_list from it.
+    beach_list derived_castle_beaches = castle_beaches_wiki;
+
+    // Make a new beach_set from the derived castles
+    beach_set missing_castle_beaches = derived_castle_beaches;
+    
+    // Remove the seen castles
+    remove_beaches(missing_castle_beaches, seen_castle_beaches);
+
+    // Statistics
+    int seen_castle_count = count(castle);
+    int derived_castle_count = count(castle_beaches_wiki);
+    int missing_castle_count = count(missing_castle_beaches);
+
+    print();
+    if (missing_castle_count == 0) {
+	print("We have have seen all " + derived_castle_count + " beaches with sand castles.");
+	return;
+    }
+	
+    print("We have not seen the following " + missing_castle_count + " beaches with sand castles:");
+    foreach b in missing_castle_beaches {
+	print("&nbsp;&nbsp;&nbsp;&nbsp;"+ b);
+    }
 }
 
 void fix_tile_data()
@@ -306,6 +339,9 @@ void main(string... parameters)
 
     // Report on what we scraped
     print_new_data();
+
+    // Report on castles we saw
+    print_castle_beaches();
 
     // Fix the tile data based on what we scraped
     fix_tile_data();
