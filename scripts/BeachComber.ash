@@ -1,6 +1,5 @@
 since r27617;
 
-import <vprops.ash>;
 import <BeachComberData.ash>
 
 // ***************************
