@@ -1,4 +1,24 @@
+import <vprops.ash>;
 import <BeachComberJSON.ash>;
+
+// ***************************
+//       Configuration       *
+// ***************************
+
+// This package tracks all rare and uncommon tiles.
+// There are less than 1000 rares and less than 50,000 uncommons.
+//
+// It can optionally track commons, as well, but since there are about 950,000 of them,
+// that will be data bloat for most users. And, since there are ~95 commons per beach,
+// detecting whether a common is new will require an efficient data structure.
+//
+// It can also track already combed tiles - which will be invaluabe in tracking down previously
+// unknown unommons and rares - but that will depend on tracking commons.
+//
+// BeachComber will set this configuration parameter to true if you are spading, and will let
+// the user specify whether or not to track rough and combed sand if it is not spading.
+
+boolean parse_commons = define_property( "VBC.ParseCommons", "boolean", "false" ).to_boolean();
 
 // ***************************
 //          Beaches          *
@@ -381,53 +401,160 @@ coords_list flatten(coords_map map)
 }
 
 // ***************************
+//     Compact Coords Map    *
+// ***************************
+
+// A compact Map that lets you look up tiles by # of minutes down the beach.
+// index by [beach, row, column
+
+typedef boolean [beach, int, int] compact_coords_map;
+
+boolean contains_tile(compact_coords_map map, int minute, int row, int column )
+{
+    return (map contains minute &&
+	    map[minute] contains row &&
+	    map[minute][row] contains column);
+}
+
+boolean contains_tile(compact_coords_map map, coords c)
+{
+    return map.contains_tile(c.minute, c.row, c.column);
+}
+
+void add_tile(compact_coords_map map, int minute, int row, int column )
+{
+    if (!map.contains_tile(minute, row, column)) {
+	map[minute, row, column] = true;
+    }
+}
+
+void add_tile(compact_coords_map map, coords c)
+{
+    map.add_tile(c.minute, c.row, c.column);
+}
+
+void add_tiles(compact_coords_map map, coords_list list)
+{
+    foreach key, tile in list {
+	map.add_tile(tile);
+    }
+}
+
+void add_tiles(compact_coords_map map, compact_coords_map input)
+{
+    foreach min, row, col in input {
+	map.add_tile(min, row, col);
+    }
+}
+
+boolean remove_tile(compact_coords_map map, int minute, int row, int column)
+{
+    if (!map.contains_tile(minute, row, column)) {
+	return false;
+    }
+
+    remove map[minute, row, column];
+    if (count(map[minute, row]) == 0) {
+	remove map[minute, row];
+    }
+
+    if (count(map[minute]) == 0) {
+	remove map[minute];
+    }
+    
+    return true;
+}
+
+boolean remove_tile(compact_coords_map map, coords c)
+{
+    return map.remove_tile(c.minute, c.row, c.column);
+}
+
+void remove_tiles(compact_coords_map map, coords_list list)
+{
+    foreach key, tile in list {
+	map.remove_tile(tile);
+    }
+}
+
+void remove_tiles(compact_coords_map map, compact_coords_map input)
+{
+    foreach minute, row, column in input {
+	map.remove_tile(minute, row, column);
+    }
+}
+
+int count_tiles(compact_coords_map map) {
+    int count = 0;
+    foreach min, row in map {
+	count += count( map[min, row] );
+    }
+    return count;
+}
+
+// ***************************
 //      Global Variables     *
 // ***************************
 
 // (local) All twinkle tiles we have seen on the beach but have not visited
-static coords_list twinkle_tiles;	// tiles.twinkles.json
+static coords_list twinkle_tiles;		// tiles.twinkles.json
 
 // (published) The set of rare tiles imported from combo
-static coords_list rare_tiles;		// tiles.rare.json
+static coords_list rare_tiles;			// tiles.rare.json
 // (local) Rare tiles not in rare_tiles
-static coords_list rare_tiles_new;	// tiles.rare.new.json
+static coords_list rare_tiles_new;		// tiles.rare.new.json
 // (local) Rare tiles from combo that we have visited and were not rare
-static coords_list rare_tiles_errors;	// tiles.rare.errors.json
+static coords_list rare_tiles_errors;		// tiles.rare.errors.json
 
 // All rare tiles = rare_tiles + rare_tiles_new - rare_files_errors
 
 // (published) Rare tiles from combo that have been verified
-static coords_list rare_tiles_verified;	// tiles.rare.verified.json
+static coords_list rare_tiles_verified;		// tiles.rare.verified.json
 // (local) Rare tiles from combo that we have visited and verified
-static coords_list rare_tiles_seen;	// tiles.rare.seen.json
+static coords_list rare_tiles_seen;		// tiles.rare.seen.json
 
 // All verified rare tiles = rare_tiles_verified + rare_tiles_seen
 
 // (published) Uncommon tiles discovered by community spading
-static coords_list uncommon_tiles;	// tiles.uncommon.json
+static coords_list uncommon_tiles;		// tiles.uncommon.json
 // (local) Uncommon tiles not in uncommon_tiles
-static coords_list uncommon_tiles_new;	// tiles.uncommon.new.json
+static coords_list uncommon_tiles_new;		// tiles.uncommon.new.json
 
 // All uncommon tiles = uncommon_tiles + uncommon_tiles_new
 
 // (published) Sand castle beaches discovered by community spading
-static beach_list castle_beaches;	// beaches.castle.json
+static beach_list castle_beaches;		// beaches.castle.json
 // (local) Sand castles not in castle_beaches
-static beach_list castle_beaches_seen;	// beaches.castle.seen.json
+static beach_list castle_beaches_seen;		// beaches.castle.seen.json
 
 // All sand castle beaches = castle_beaches + castle_beaches_seen
 
 // (published) Sand castle beaches decoded using Wiki's algorithm.
 // The starting (highest) beach is #9375
-static beach_list castle_beaches_wiki;	// beaches.castle.wiki.json
+static beach_list castle_beaches_wiki;		// beaches.castle.wiki.json
+
+// (published) Beach Heads
+static coords_list beach_heads;			// tiles.beach_heads.json
+
+// (published) Common tiles discovered by community spading
+static compact_coords_map common_tiles_map;	// tiles.common.json
+// (local) Common tiles not in common_tiles
+static compact_coords_map common_tiles_new_map;	// tiles.common.new.json
+
+// (local) Combed tiles discovered by community spading
+static compact_coords_map combed_tiles_map;	// tiles.combed.json
+// (local) local tiles not in combed_tiles
+static compact_coords_map combed_tiles_new_map;	// tiles.combed.new.json
 
 // (local) The last segment of the beach that we have looked at and started combing.
-static int spade_last_minutes;		// spade.minutes.txt
+static int spade_last_minutes;			// spade.minutes.txt
 
 coords_map twinkles_map;
 coords_map rare_tiles_map;
 coords_map verified_tiles_map;
 coords_map uncommon_tiles_map;
+compact_coords_map all_common_tiles_map;
+compact_coords_map all_combed_tiles_map;
 beach_set castle_beach_set;
 
 // ***************************
@@ -436,9 +563,14 @@ beach_set castle_beach_set;
 
 //  { "minute": 34, "row": 8, "column": 9 }
 
+string coords_to_json( int minute, int row, int column )
+{
+    return "{ \"minute\": " + minute + ", \"row\": " + row + ", \"column\": " + column + " }";
+}
+
 string coords_to_json( coords coords )
 {
-    return "{ \"minute\": " + coords.minute + ", \"row\": " + coords.row + ", \"column\": " + coords.column + " }";
+    return coords_to_json( coords.minute, coords.row, coords.column );
 }
 
 coords json_to_coords( string json )
@@ -448,6 +580,29 @@ coords json_to_coords( string json )
     int row = object.get_json_int("row");
     int column = object.get_json_int("column");
     return new coords(minute, row, column);
+}
+
+coords_list json_to_coords_list( buffer json )
+{
+    coords_list result;
+    json_array array = parse_json_array(json);
+    foreach n, value in array {
+	coords coords = json_to_coords(value);
+	int key = coords.to_key();
+	result[key] = coords;
+    }
+    return result;
+}
+
+compact_coords_map json_to_compact_coords_map( buffer json )
+{
+    compact_coords_map result;
+    json_array array = parse_json_array(json);
+    foreach n, value in array {
+	coords coords = json_to_coords(value);
+	result.add_tile(coords);
+    }
+    return result;
 }
 
 buffer coords_list_to_json( coords_list list )
@@ -465,16 +620,19 @@ buffer coords_list_to_json( coords_list list )
     return buf;
 }
 
-coords_list json_to_coords_list( buffer json )
+buffer compact_coords_map_to_json( compact_coords_map map )
 {
-    coords_list result;
-    json_array array = parse_json_array(json);
-    foreach n, value in array {
-	coords coords = json_to_coords(value);
-	int key = coords.to_key();
-	result[key] = coords;
+    buffer buf = "[";
+    int count = 0;
+    foreach min, row, col in map {
+	if (count++ > 0) {
+	    buf.append(",");
+	}
+	buf.append("\n  ");
+	buf.append(coords_to_json(min, row, col));
     }
-    return result;
+    buf.append("\n]\n");
+    return buf;
 }
 
 // ***************************
@@ -505,6 +663,16 @@ coords_list load_tiles(string filename)
 void save_tiles(coords_list data, string filename)
 {
     data.coords_list_to_json().buffer_to_file(beach_file(filename));
+}
+
+compact_coords_map load_tiles_map(string filename)
+{
+    return file_to_buffer(beach_file(filename)).json_to_compact_coords_map();
+}
+
+void save_tiles_map(compact_coords_map data, string filename)
+{
+    data.compact_coords_map_to_json().buffer_to_file(beach_file(filename));
 }
 
 beach_list load_beaches(string filename)
@@ -539,10 +707,20 @@ void populate_tile_maps(boolean verbose)
     castle_beach_set.add_beaches(castle_beaches);
     castle_beach_set.add_beaches(castle_beaches_seen);
 
+    // These will not be populated unless we are spading commons
+    all_common_tiles_map.clear();
+    all_common_tiles_map.add_tiles(common_tiles_map);
+    all_common_tiles_map.add_tiles(common_tiles_new_map);
+    all_combed_tiles_map.clear();
+    all_combed_tiles_map.add_tiles(combed_tiles_map);
+    all_combed_tiles_map.add_tiles(combed_tiles_new_map);
+
     if (verbose) {
 	print("Beaches with rare tiles: " + count(rare_tiles_map));
 	print("Beaches with verified rare tiles: " + count(verified_tiles_map));
 	print("Beaches with uncommon tiles: " + count(uncommon_tiles_map));
+	print("Beaches with common tiles: " + all_common_tiles_map.count_tiles());
+	print("Beaches with combed tiles: " + all_combed_tiles_map.count_tiles());
 	print("Beaches with sand castles: " + count(castle_beach_set));
 	print("Beaches with unvisited twinkles: " + count(twinkles_map));
 	print();
@@ -559,6 +737,14 @@ boolean load_tile_data(boolean verbose)
     rare_tiles_seen = load_tiles("tiles.rare.seen.json");
     uncommon_tiles = load_tiles("tiles.uncommon.json");
     uncommon_tiles_new = load_tiles("tiles.uncommon.new.json");
+    // This consumes lots of memory, time, and disk. Load only if spading
+    if (parse_commons) {
+	common_tiles_map = load_tiles_map("tiles.common.json");
+	common_tiles_new_map = load_tiles_map("tiles.common.new.json");
+	combed_tiles_map = load_tiles_map("tiles.combed.json");
+	combed_tiles_new_map = load_tiles_map("tiles.combed.new.json");
+    }
+    beach_heads = load_tiles("tiles.beach_heads.json");
     castle_beaches = load_beaches("beaches.castle.json");
     castle_beaches_seen = load_beaches("beaches.castle.seen.json");
     castle_beaches_wiki = load_beaches("beaches.castle.wiki.json");
@@ -583,9 +769,28 @@ boolean load_tile_data(boolean verbose)
 	print("New uncommon tiles: " + count(uncommon_tiles_new));
 	int total_uncommon = count(uncommon_tiles) + count(uncommon_tiles_new);
 	print("Total: " + total_uncommon);
+
+	int common_tiles_count = common_tiles_map.count_tiles();
+	int common_tiles_new_count = common_tiles_new_map.count_tiles();
+	print();
+	print("Known common tiles: " + common_tiles_count);
+	print("New common tiles: " + common_tiles_new_count);
+	int total_common = common_tiles_count + common_tiles_new_count;
+	print("Total: " + total_common);
+
+	int combed_tiles_count = combed_tiles_map.count_tiles();
+	int combed_tiles_new_count = combed_tiles_new_map.count_tiles();
+	print();
+	print("Known combed tiles: " + combed_tiles_count);
+	print("New combed tiles: " + combed_tiles_new_count);
+	int total_combed = combed_tiles_count + combed_tiles_new_count;
+	print("Total: " + total_combed);
+
 	print();
 	print("Known sand castle beaches: " + count(castle_beaches));
 	print("New sand castle beaches: " + count(castle_beaches_seen));
+	print();
+	print("Beach Heads: " + count(beach_heads));
 	print();
 	print("Unvisited twinkle tiles: " + count(twinkle_tiles));
 	print("Last minutes down the beach spaded: " + spade_last_minutes);
@@ -604,6 +809,12 @@ void save_tile_data()
     save_tiles(rare_tiles_errors, "tiles.rare.errors.json");
     save_tiles(rare_tiles_seen, "tiles.rare.seen.json");
     save_tiles(uncommon_tiles_new, "tiles.uncommon.new.json");
+    if (parse_commons) {
+	save_tiles_map(common_tiles_new_map, "tiles.common.new.json");
+	save_tiles_map(combed_tiles_new_map, "tiles.combed.new.json");
+    }
+    sort beach_heads by value;
+    save_tiles(beach_heads, "tiles.beach_heads.json");
     sort castle_beaches_seen by value;
     save_beaches(castle_beaches_seen, "beaches.castle.seen.json");
 
@@ -697,6 +908,25 @@ void merge_tile_data(boolean verbose)
 	save_tiles(uncommon_tiles_new, "tiles.uncommon.new.json");
     }
 
+    void merge_common_tiles()
+    {
+	// Common tiles
+	int known_common_count = common_tiles_map.count_tiles();
+	int new_common_count = common_tiles_new_map.count_tiles();
+	common_tiles_map.add_tiles(common_tiles_new_map);
+	int merged_common_count = common_tiles_map.count_tiles();
+
+	if (verbose) {
+	    print("Known common tiles: " + known_common_count);
+	    print("New common tiles: " + new_common_count);
+	    print("Merged common tiles: " + merged_common_count);
+	}
+
+	common_tiles_new_map.clear();
+	save_tiles_map(common_tiles_map, "tiles.common.json");
+	save_tiles_map(common_tiles_new_map, "tiles.common.new.json");
+    }
+
     void merge_castle_beaches()
     {
 	// Sand Castle beaches
@@ -724,6 +954,9 @@ void merge_tile_data(boolean verbose)
     merge_rare_tiles();
     merge_verified_tiles();
     merge_uncommon_tiles();
+    if (parse_commons) {
+	merge_common_tiles();
+    }
     merge_castle_beaches();
 }
 
@@ -790,6 +1023,25 @@ void prune_tile_data(boolean verbose, boolean save)
 	}
     }
 
+    void prune_common_tiles()
+    {
+	// Common tiles
+	int known_common_count = common_tiles_map.count_tiles();
+	int original_new_count = common_tiles_new_map.count_tiles();
+	common_tiles_new_map.remove_tiles(common_tiles_map);
+	int new_new_count = common_tiles_new_map.count_tiles();
+
+	if (verbose) {
+	    print("Known common tiles: " + known_common_count);
+	    print("Locally discovered common tiles: " + original_new_count);
+	    print("Not yet integrated common tiles: " + new_new_count);
+	}
+
+	if (save) {
+	    common_tiles_new_map.save_tiles_map("tiles.common.new.json");
+	}
+    }
+
     void prune_castle_beaches()
     {
 	// Sand castle tiles
@@ -817,5 +1069,8 @@ void prune_tile_data(boolean verbose, boolean save)
     prune_rare_tiles();
     prune_verified_tiles();
     prune_uncommon_tiles();
+    if (parse_commons) {
+	prune_common_tiles();
+    }
     prune_castle_beaches();
 }

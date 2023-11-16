@@ -2,7 +2,7 @@ since r27551;
 
 import <BeachComberData.ash>
 
-coords_list common;
+compact_coords_map common;
 coords_list uncommon;
 coords_list rare;
 coords_list unknown;
@@ -107,7 +107,7 @@ void print_new_data()
     print();
     print("Tiles processed");
     print();
-    print("common: " + count(common));
+    print("common: " + common.count_tiles());
     print("uncommon: " + count(uncommon));
     print("rare: " + count(rare));
     print("unknown: " + count(unknown));
@@ -161,6 +161,9 @@ void fix_tile_data()
     uncommon_tiles_new.clear();
     uncommon_tiles_new.add_tiles(uncommon);
 
+    common_tiles_new_map.clear();
+    common_tiles_new_map.add_tiles(common);
+
     castle_beaches_seen.clear();
     castle_beaches_seen = castle;
 }
@@ -176,12 +179,16 @@ void print_tile_summary(string header)
     print("seen_rare_tiles: " + count(rare_tiles_seen));
     print("uncommon_tiles: " + count(uncommon_tiles));
     print("new uncommon_tiles: " + count(uncommon_tiles_new));
+    print("common_tiles: " + common_tiles_map.count_tiles());
+    print("new common_tiles: " + common_tiles_new_map.count_tiles());
     print("castle_beaches: " + count(castle_beaches));
     print("castle_beaches_seen: " + count(castle_beaches_seen));
 }
 
 string[int] players;
+string date = "20230815";
 string player = "";
+boolean commons = true;
 boolean save = false;
 
 void print_help()
@@ -193,37 +200,38 @@ void print_help()
     print(spaces + "player=name - look at session log for a single player");
     print(spaces + "(if omitted, take players from beach/players.txt)");
     print(spaces + "(if empty, use current player, if logged in)");
+    print(spaces + "commons - scrape commonsafter scraping tiles and pruning, save results.");
     print(spaces + "save - after scraping tiles and pruning, save results.");
 }
 
-boolean is_valid_date(string date)
+string parse_parameters(string... parameters)
 {
-    matcher m = create_matcher("(\\d{4})(\\d{2})(\\d{2})", date);
-    if (!m.find()) {
-	print("date must be formatted as YYYYMMDD", "red");
-	return false;
+    boolean is_valid_date(string param)
+    {
+	matcher m = create_matcher("(\\d{4})(\\d{2})(\\d{2})", param);
+	if (!m.find()) {
+	    print("date must be formatted as YYYYMMDD", "red");
+	    return false;
+	}
+	int year = m.group(1).to_int();
+	// BeachComber started collecting data in 2023. Do we care?
+	if (year < 2023) {
+	    print("BeachComber started comllecting data in 2023; no need to process earlier logs", "red");
+	    return false;
+	}
+	int month = m.group(2).to_int();
+	if (month < 1 || month > 12) {
+	    print("month must be from 1 - 12", "red");
+	    return false;
+	}
+	int day = m.group(3).to_int();
+	if (day < 1 || day > 31) {
+	    print("day must be from 1 - 31", "red");
+	    return false;
+	}
+	return true;
     }
-    int year = m.group(1).to_int();
-    // BeachComber started collecting data in 2023. Do we care?
-    if (year < 2023) {
-	print("BeachComber started comllecting data in 2023; no need to process earlier logs", "red");
-	return false;
-    }
-    int month = m.group(2).to_int();
-    if (month < 1 || month > 12) {
-	print("month must be from 1 - 12", "red");
-	return false;
-    }
-    int day = m.group(3).to_int();
-    if (day < 1 || day > 31) {
-	print("day must be from 1 - 31", "red");
-	return false;
-    }
-    return true;
-}
 
-void parse_parameters(string... parameters)
-{
     void load_players()
     {
 	// If user specified a player, use exactly that one.
@@ -257,16 +265,15 @@ void parse_parameters(string... parameters)
 
     boolean bogus = false;
     foreach n, param in parameters {
-	// Skip the date
-	if (n == 0) {
-	    continue;
-	}
 	switch (param) {
 	case "":
 	    continue;
 	case "help":
 	    print_help();
 	    exit;
+	case "commons":
+	    commons = true;
+	    continue;
 	case "save":
 	    save = true;
 	    continue;
@@ -275,6 +282,17 @@ void parse_parameters(string... parameters)
 	if (param.starts_with("player=")) {
 	    int index = param.index_of("=");
 	    player = param.substring(index + 1);
+	    continue;
+	}
+
+	matcher date_matcher = create_matcher("(\\d{8})", param);
+	if (date_matcher.find()) {
+	    if (is_valid_date(param)) {
+		date = param;
+	    } else {
+		// Error message already printed
+		bogus = true;
+	    }
 	    continue;
 	}
 
@@ -288,6 +306,8 @@ void parse_parameters(string... parameters)
     }
 
     load_players();
+
+    return date;
 }
 
 void main(string... parameters)
@@ -299,12 +319,6 @@ void main(string... parameters)
 
     if (params.count() == 0 || params[0] == "help") {
 	print_help();
-	exit;
-    }
-
-    string date = params[0];
-    if (!date.is_valid_date()) {
-	// Error message already printed
 	exit;
     }
 
@@ -350,5 +364,9 @@ void main(string... parameters)
     // Prune existing data from the known data
     print();
     prune_tile_data(true, save);
+    // *** temporary for populating initial map of commons
+    // if (commons) {
+    //	   common_tiles_new_map.save_tiles_map("tiles.common.new.json");
+    // }
     print_tile_summary("Pruned tile data");
 }
