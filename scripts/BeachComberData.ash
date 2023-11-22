@@ -331,6 +331,22 @@ void remove_tiles(coords_list list, coords_list tiles)
 
 typedef coords_list[beach] coords_map;
 
+boolean contains_tile(coords_map map, int minute, int row, int column )
+{
+    coords_list tiles = map[minute];
+    foreach n, c in tiles {
+	if (c.row == row && c.column == column) {
+	    return true;
+	}
+    }
+    return false;
+}
+
+boolean contains_tile(coords_map map, coords c)
+{
+    return map.contains_tile(c.minute, c.row, c.column);
+}
+
 void add_tile(coords_map map, coords c)
 {
     int minutes = c.minute;
@@ -484,6 +500,10 @@ void remove_tiles(compact_coords_map map, compact_coords_map input)
     }
 }
 
+int count_beaches(compact_coords_map map) {
+    return count(map);
+}
+
 int count_tiles(compact_coords_map map) {
     int count = 0;
     foreach min, row in map {
@@ -541,10 +561,8 @@ static compact_coords_map common_tiles_map;	// tiles.common.json
 // (local) Common tiles not in common_tiles
 static compact_coords_map common_tiles_new_map;	// tiles.common.new.json
 
-// (local) Combed tiles discovered by community spading
+// (local) Combed tiles discovered by spading
 static compact_coords_map combed_tiles_map;	// tiles.combed.json
-// (local) local tiles not in combed_tiles
-static compact_coords_map combed_tiles_new_map;	// tiles.combed.new.json
 
 // (local) The last segment of the beach that we have looked at and started combing.
 static int spade_last_minutes;			// spade.minutes.txt
@@ -554,7 +572,6 @@ coords_map rare_tiles_map;
 coords_map verified_tiles_map;
 coords_map uncommon_tiles_map;
 compact_coords_map all_common_tiles_map;
-compact_coords_map all_combed_tiles_map;
 beach_set castle_beach_set;
 
 // ***************************
@@ -711,16 +728,13 @@ void populate_tile_maps(boolean verbose)
     all_common_tiles_map.clear();
     all_common_tiles_map.add_tiles(common_tiles_map);
     all_common_tiles_map.add_tiles(common_tiles_new_map);
-    all_combed_tiles_map.clear();
-    all_combed_tiles_map.add_tiles(combed_tiles_map);
-    all_combed_tiles_map.add_tiles(combed_tiles_new_map);
 
     if (verbose) {
 	print("Beaches with rare tiles: " + count(rare_tiles_map));
 	print("Beaches with verified rare tiles: " + count(verified_tiles_map));
 	print("Beaches with uncommon tiles: " + count(uncommon_tiles_map));
-	print("Beaches with common tiles: " + all_common_tiles_map.count_tiles());
-	print("Beaches with combed tiles: " + all_combed_tiles_map.count_tiles());
+	print("Beaches with common tiles: " + all_common_tiles_map.count_beaches());
+	print("Beaches with combed tiles: " + combed_tiles_map.count_beaches());
 	print("Beaches with sand castles: " + count(castle_beach_set));
 	print("Beaches with unvisited twinkles: " + count(twinkles_map));
 	print();
@@ -742,7 +756,6 @@ boolean load_tile_data(boolean verbose)
 	common_tiles_map = load_tiles_map("tiles.common.json");
 	common_tiles_new_map = load_tiles_map("tiles.common.new.json");
 	combed_tiles_map = load_tiles_map("tiles.combed.json");
-	combed_tiles_new_map = load_tiles_map("tiles.combed.new.json");
     }
     beach_heads = load_tiles("tiles.beach_heads.json");
     castle_beaches = load_beaches("beaches.castle.json");
@@ -779,12 +792,8 @@ boolean load_tile_data(boolean verbose)
 	print("Total: " + total_common);
 
 	int combed_tiles_count = combed_tiles_map.count_tiles();
-	int combed_tiles_new_count = combed_tiles_new_map.count_tiles();
 	print();
 	print("Known combed tiles: " + combed_tiles_count);
-	print("New combed tiles: " + combed_tiles_new_count);
-	int total_combed = combed_tiles_count + combed_tiles_new_count;
-	print("Total: " + total_combed);
 
 	print();
 	print("Known sand castle beaches: " + count(castle_beaches));
@@ -811,10 +820,8 @@ void save_tile_data()
     save_tiles(uncommon_tiles_new, "tiles.uncommon.new.json");
     if (parse_commons) {
 	save_tiles_map(common_tiles_new_map, "tiles.common.new.json");
-	save_tiles_map(combed_tiles_new_map, "tiles.combed.new.json");
+	save_tiles_map(combed_tiles_map, "tiles.combed.json");
     }
-    sort beach_heads by value;
-    save_tiles(beach_heads, "tiles.beach_heads.json");
     sort castle_beaches_seen by value;
     save_beaches(castle_beaches_seen, "beaches.castle.seen.json");
 
