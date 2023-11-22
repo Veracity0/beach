@@ -216,6 +216,7 @@ void parse_parameters(string... parameters)
 	    // We want to methodically visit all the beaches in order to discover
 	    // new tile data - potentially including unpublished rares
 	    mode = "spade";
+	    parse_commons = true;
 	    pick_strategy = "twinkle";
 	    continue;
 
@@ -470,6 +471,19 @@ void save_visited_tile(coords tile, string tile_type) {
 	} else {
 	    uncommon_tiles_new.add_tile(tile);
 	}
+	return;
+    case "common":
+	// If we thought this was a rare tile, oops!
+	if (rare_tiles contains key) {
+	    print( "We thought tile " + tile + "was rare, but it is common." );
+	    rare_tiles.remove_tile(tile);
+	    rare_tiles_errors.add_tile(tile);
+	} else if (uncommon_tiles contains key) {
+	    print( "We thought tile " + tile + "was uncommon, but it is common." );
+	    uncommon_tiles.remove_tile(tile);
+	}
+	// When we inspected the beach, we knew this was common and
+	// added it to all_common_tiles_map and common_tiles_new_map
 	return;
     default:
 	// If we thought this was a rare tile, oops!
@@ -1081,6 +1095,60 @@ buffer comb_beach( buffer page )
     beach_layout layout = get_beach_layout();
     sorted_beach_map map = sort_beach( minutes, layout );
 
+    void add_commons(string type)
+    {
+	coords_list tiles = map[type];
+	common_tiles_new_map.add_tiles(tiles);
+	all_common_tiles_map.add_tiles(tiles);
+    }
+
+    void add_combed(string type)
+    {
+	coords_list tiles = map[type];
+	foreach n, tile in tiles {
+	    // If the tile is a known rare, skip it.
+	    if (rare_tiles_map.contains_tile(tile)) {
+		continue;
+	    }
+	    // If the tile is a known uncommon, skip it.
+	    if (uncommon_tiles_map.contains_tile(tile)) {
+		continue;
+	    }
+	    // If the tile is a known common, skip it.
+	    if (all_common_tiles_map.contains_tile(tile)) {
+		continue;
+	    }
+	    combed_tiles_map.add_tile(tile);
+	}
+    }
+
+    void remove_combed(string type)
+    {
+	coords_list tiles = map[type];
+	combed_tiles_map.remove_tiles(tiles);
+    }
+
+    // If we are parsing commons, find common and combed squares
+    if (parse_commons) {
+	// If you have TwinkleVision™, rough sand is common
+	if (twinkle_vision) {
+	    add_commons("r");
+	}
+	// sand castles are common
+	add_commons("C");
+	// A beach head is not, but it is not uncommon or rare
+	// add_commons("H");
+
+	// Remove formerly combed tiles
+	remove_combed("t");	// twinkles
+	remove_combed("r");	// rough sand
+	remove_combed("C");	// sand castle
+	remove_combed("H");	// beach head
+	remove_combed("W");	// beached whale
+	// Add currently combed tiles
+	add_combed("c");
+    }
+
     // Now that we have the beach map, see how many rows are covered by waves
     if (mode == "rare" && check_tides(true)) {
 	// Now that we know the tides, refilter available rare tiles
@@ -1088,11 +1156,14 @@ buffer comb_beach( buffer page )
     }
 
     // Save previously unseen sand castles
-    if (count(map["C"]) > 0 && !(castle_beach_set contains minutes)) {
-	// Add to the end of the list of seen beaches with a sand castle
-	castle_beaches_seen.add_beach(minutes);
-	// Keep list in numerical order
-	sort castle_beaches_seen by value;
+    if (count(map["C"]) > 0) {
+	// Save previously unseen sand castles
+	if (!(castle_beach_set contains minutes)) {
+	    // Add to the end of the list of seen beaches with a sand castle
+	    castle_beaches_seen.add_beach(minutes);
+	    // Keep list in numerical order
+	    sort castle_beaches_seen by value;
+	}
     }
 
     // Inspect the layout and find all squares with twinkles.
@@ -1491,7 +1562,7 @@ void main(string... parameters )
 
 	print();
 	foreach type in $strings[common, uncommon, rare, unknown] {
-	    print( "Found " + combed_rarities[type] + " " + type + " tiles." );
+	    print( "Combed " + combed_rarities[type] + " " + type + " tiles." );
 	}
 
 	print();

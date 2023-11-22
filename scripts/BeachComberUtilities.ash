@@ -98,7 +98,6 @@ beach_set included_beaches( beach_set input, beach_set test )
 //     Uncommon Beaches      *
 // ***************************
 
-
 beach_set all_unknown_uncommon_beaches()
 {
     beach_set uncommon_beaches = all_beaches();
@@ -126,40 +125,22 @@ beach_set unknown_unrare_beaches(beach_set input)
     return input.excluded_beaches(excluded);
 }
 
-void main(string... parameters)
+// ***************************
+// *       Parameters        *
+// ***************************
+
+boolean verbose = false;
+boolean uncommon = false;
+boolean tides = false;
+boolean combed = false;
+boolean save = false;
+
+// ***************************
+//      Uncommon Tiles       *
+// ***************************
+
+void analyze_uncommon_beaches()
 {
-    boolean verbose = false;
-
-    void parse_parameters(string... parameters)
-    {
-	boolean bogus = false;
-	foreach n, param in parameters {
-	    switch (param) {
-	    case "":
-		continue;
-	    case "verbose":
-		verbose = true;
-		continue;
-	    }
-
-	    print("I don't understand what '" + param + "' means", "red");
-	    bogus = true;
-	    continue;
-	}
-
-	if (bogus) {
-	    exit;
-	}
-    }
-
-    // Parameters are optional. Depending on how the script is invoked,
-    // there may be a single string with space-separated keywords, or
-    // multiple strings. Whichever, turn into an array of keywords.
-    string[] params = parameters.join_strings(" ").split_string(" ");
-
-    // Parse parameters
-    parse_parameters(params);
-
     void load_beach_data()
     {
 	rare_tiles = load_tiles("tiles.rare.json");
@@ -218,5 +199,205 @@ void main(string... parameters)
     if (verbose) {
 	print_beach_set(unrare);
     }
-    
+}   
+
+// ***************************
+//       Beach Tides         *
+// ***************************
+
+void analyze_beach_tides()
+{
+    // Look at the map of commons and count how many beaches
+    // Have been inspected at each tide level.
+
+    void load_beach_data()
+    {
+	common_tiles_map = load_tiles_map("tiles.common.json");
+	common_tiles_new_map = load_tiles_map("tiles.common.new.json");
+	all_common_tiles_map.clear();
+	all_common_tiles_map.add_tiles(common_tiles_map);
+	all_common_tiles_map.add_tiles(common_tiles_new_map);
+    }
+
+    load_beach_data();
+
+    int[5] tides;	// row 1-5 are spaded
+    int unknown = 0;	// Anything else
+
+    // all_common_tiles_map is boolean [int, int, int]
+    foreach minutes in all_common_tiles_map {
+	boolean [int,int] slice = all_common_tiles_map[minutes];
+	foreach row in slice {
+	    // Sanity check
+	    if (row < 1 || row > 5) {
+		unknown++;
+		continue;
+	    }
+	    // Increment lowest seen tide
+	    tides[row-1]++;
+	    // We've seen enough of this beach;
+	    break;
+	}
+    }
+
+    print("There are " + all_common_tiles_map.count_beaches() + " beaches with observed commons.");
+    foreach row in tides {
+	print(to_string(tides[row]) + " beaches have been spaded with tides = " + row);
+    }
+    print(to_string(unknown) + " beaches have only seen higher rows");
+}
+
+// ***************************
+//       Combed Tiles        *
+// ***************************
+
+void prune_combed_tiles()
+{
+    // Remove all known rares, uncommons, and commons from combed tiles map
+
+    void load_beach_data()
+    {
+	rare_tiles = load_tiles("tiles.rare.json");
+	rare_tiles_new = load_tiles("tiles.rare.new.json");
+	rare_tiles_errors = load_tiles("tiles.rare.errors.json");
+	rare_tiles_map.clear();
+	rare_tiles_map.add_tiles(rare_tiles);
+	rare_tiles_map.add_tiles(rare_tiles_new);
+	rare_tiles_map.remove_tiles(rare_tiles_errors);
+
+	uncommon_tiles = load_tiles("tiles.uncommon.json");
+	uncommon_tiles_new = load_tiles("tiles.uncommon.new.json");
+	uncommon_tiles_map.clear();
+	uncommon_tiles_map.add_tiles(uncommon_tiles);
+	uncommon_tiles_map.add_tiles(uncommon_tiles_new);
+
+	common_tiles_map = load_tiles_map("tiles.common.json");
+	common_tiles_new_map = load_tiles_map("tiles.common.new.json");
+	all_common_tiles_map.clear();
+	all_common_tiles_map.add_tiles(common_tiles_map);
+	all_common_tiles_map.add_tiles(common_tiles_new_map);
+
+	combed_tiles_map = load_tiles_map("tiles.combed.json");
+    }
+
+    load_beach_data();
+
+    int original_beaches = combed_tiles_map.count_beaches();
+    int original_tiles = combed_tiles_map.count_tiles();
+
+    int rares = 0;
+    int uncommons = 0;
+    int commons = 0;
+
+    foreach minute, row, column in combed_tiles_map {
+	coords c = new coords(minute, row, column);
+
+	boolean check_map(coords_map map)
+	{
+	    return map.contains_tile(c);
+	}
+
+	boolean check_map(compact_coords_map map)
+	{
+	    return map.contains_tile(c);
+	}
+
+	if (check_map(rare_tiles_map)) {
+	    rares++;
+	} else if (check_map(uncommon_tiles_map)) {
+	    uncommons++;
+	}
+	else if (check_map(all_common_tiles_map)) {
+	    commons++;
+	}
+	else {
+	    continue;
+	}
+
+	combed_tiles_map.remove_tile(c);
+    }
+
+    int new_beaches = combed_tiles_map.count_beaches();
+    int new_tiles = combed_tiles_map.count_tiles();
+
+    if (original_tiles != new_tiles) {
+	print("rare tiles seen as combed: " + rares);
+	print("uncommon tiles seen as combed: " + uncommons);
+	print("common tiles seen as combed: " + commons);
+	print();
+	print("Combed tiles: " + original_tiles + " -> " + new_tiles);
+	print("Combed beaches: " + original_beaches + " -> " + new_beaches);
+
+	if (save) {
+	    save_tiles_map(combed_tiles_map, "tiles.combed.json");
+	}
+    } else {
+	print("There are " + original_tiles + " unknown combed tiles on " + original_beaches + " beaches.");
+    }
+}
+
+// ***************************
+//      Master Control       *
+// ***************************
+
+void main(string... parameters)
+{
+    void parse_parameters(string... parameters)
+    {
+	boolean bogus = false;
+	foreach n, param in parameters {
+	    switch (param) {
+	    case "":
+		continue;
+	    case "verbose":
+		verbose = true;
+		continue;
+	    case "save":
+		save = true;
+		continue;
+	    case "uncommon":
+		uncommon = true;
+		continue;
+	    case "tides":
+		tides = true;
+		parse_commons = true;
+		continue;
+	    case "combed":
+		combed = true;
+		parse_commons = true;
+		continue;
+	    }
+
+	    print("I don't understand what '" + param + "' means", "red");
+	    bogus = true;
+	    continue;
+	}
+
+	if (bogus) {
+	    exit;
+	}
+    }
+
+    // Parameters are optional. Depending on how the script is invoked,
+    // there may be a single string with space-separated keywords, or
+    // multiple strings. Whichever, turn into an array of keywords.
+    string[] params = parameters.join_strings(" ").split_string(" ");
+
+    // Parse parameters
+    parse_parameters(params);
+
+    if (uncommon) {
+	analyze_uncommon_beaches();
+	return;
+    }
+
+    if (tides) {
+	analyze_beach_tides();
+	return;
+    }
+
+    if (combed) {
+	prune_combed_tiles();
+	return;
+    }
 }
