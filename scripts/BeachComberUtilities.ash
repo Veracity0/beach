@@ -50,6 +50,532 @@ import <BeachComberData.ash>
 // visiting those beaches would be useful.
 
 // ***************************
+// *       Tile Data         *
+// ***************************
+
+// Each segment of the beach (from 1 to 10,000 minutes of wandering)
+// contains 10 rows of 10 tiles each. I refer to a segment as a "beach".
+
+// Tiles are of seven types:
+
+record tile_data
+{
+    // Every tile should be one of the following
+    int rares;
+    int uncommons;
+    int commons;
+    int heads;
+    int castles;
+    // Unspaded tiles can be one of the following
+    int combed;
+    int unseen;
+};
+
+// That data structure can be used in multiple ways:
+//
+// Aggregate 10 tiles in a row
+// Aggregate 10 rows in a beach
+// Aggregate 10,000 beaches for the total
+
+// Make a copy tyhat you can modify as desired
+tile_data copy(tile_data orig)
+{
+    tile_data result;
+    result.rares = orig.rares;
+    result.uncommons = orig.uncommons;
+    result.commons = orig.commons;
+    result.heads = orig.heads;
+    result.castles = orig.castles;
+    result.combed = orig.combed;
+    result.unseen = orig.unseen;
+    return result;
+}
+
+// Add another tile_data into a source
+void add(tile_data result, tile_data two)
+{
+    result.rares += two.rares;
+    result.uncommons += two.uncommons;
+    result.commons += two.commons;
+    result.heads += two.heads;
+    result.castles += two.castles;
+    result.combed += two.combed;
+    result.unseen += two.unseen;
+}
+
+buffer tile_data_header(buffer table, boolean rows)
+{
+    table.append("<tr>");
+    if (rows) {
+	table.append("<th>row</th>");
+    } else {
+	table.append("<th>minutes</th>");
+    }
+    table.append("<th>rare</th>");
+    table.append("<th>uncommon</th>");
+    table.append("<th>common</th>");
+    table.append("<th>head</th>");
+    table.append("<th>castle</th>");
+    table.append("<th>combed</th>");
+    table.append("<th>unseen</th>");
+    table.append("<th>unknown</th>");
+    table.append("</tr>");
+    return table;
+}
+
+buffer to_html(tile_data data, int id, boolean header, boolean rows, buffer table)
+{
+    void add_row(int row)
+    {
+	table.append("<tr>");
+	table.append("<td>");
+	table.append(id);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(data.rares);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(data.uncommons);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(data.commons);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(data.heads);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(data.castles);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(data.combed);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(data.unseen);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(to_int(data.combed + data.unseen));
+	table.append("</td>");
+	table.append("</tr>");
+    }
+
+    if (header) {
+	table.append("<html>");
+	table.append("<table border=1>");
+	table.tile_data_header(rows);
+    }
+
+    add_row(id);
+
+    if (header) {
+	table.append("</table>");
+	table.append("</html>");
+    }
+
+    return table;
+}
+
+buffer to_html(tile_data data, int id, boolean header, boolean rows)
+{
+    buffer table;
+    return data.to_html(id, header, rows, table);
+}
+
+// One useful representation of a "beach" is as an array of 10 rows,
+// numbered from 1 to 10. 1 is closest to the water and 10 is farthest
+// away. Rows 1 to 4 can be covered by the tides.
+
+typedef tile_data[int] beach_data;
+
+// Examine tile data and generate the beach_data for a single beach
+beach_data beach_rows(int minutes)
+{
+    beach_data result;
+    // Inspect each row on this beach
+    for (int row = 10; row > 0; row--) {
+	tile_data tiles = result[row];
+	// Inspect each column on this beach
+	for (int column = 0; column < 10; column++) {
+	    if (rare_tiles_map.contains_tile(minutes, row, column)) {
+		tiles.rares++;
+	    } else if (uncommon_tiles_map.contains_tile(minutes, row, column)) {
+		tiles.uncommons++;
+	    } else if (beach_head_map.contains_tile(minutes, row, column)) {
+		tiles.heads++;
+	    } else if (castle_tiles_map.contains_tile(minutes, row, column)) {
+		// *** Do this before commons
+		tiles.castles++;
+	    } else if (all_common_tiles_map.contains_tile(minutes, row, column)) {
+		tiles.commons++;
+	    } else if (combed_tiles_map.contains_tile(minutes, row, column)) {
+		tiles.combed++;
+	    } else {
+		tiles.unseen++;
+	    }
+	}
+    }
+    return result;
+}
+
+// Sum the rows into a tile_data for a single beach
+tile_data total(beach_data data)
+{
+    tile_data result;
+    foreach row, td in data {
+	result.add(td);
+    }
+    return result;
+}
+
+buffer to_html(beach_data data, int id)
+{
+    buffer table;
+
+    void add_row(int row)
+    {
+	table.append("<tr>");
+	table.append("<td>");
+	table.append(row);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(data[row].rares);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(data[row].uncommons);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(data[row].commons);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(data[row].heads);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(data[row].castles);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(data[row].combed);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(data[row].unseen);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(to_int(data[row].combed + data[row].unseen));
+	table.append("</td>");
+	table.append("</tr>");
+    }
+
+    table.append("<html>");
+    table.append("<table border=1>");
+    table.append("<caption>");
+    table.append("Beach ");
+    table.append(to_int(id));
+    table.append("</caption>");
+
+    table.tile_data_header(true);
+    for (int row = 10; row > 0; row--) {
+	add_row(row);
+    }
+
+    table.append("</table>");
+    table.append("</html>");
+
+    return table;
+}
+
+// ***************************
+//     Describe One Beach    *
+// ***************************
+
+void describe_beach(int minutes, boolean verbose)
+{
+
+    // Beaches depend on common and combed tile data
+    parse_commons = true;
+    load_tile_data(false);
+
+    // Fetch the row data for this beach
+    beach_data data = beach_rows(minutes);
+
+    // Blank line between loading messages and tavle
+    print();
+
+    // If verbose, we want to see all the rows
+    if (verbose) {
+	buffer result = data.to_html(minutes);
+	print_html(result);
+	return;
+    }
+
+    // Otherwise, we want to see the sum of all the rows
+    tile_data sum = data.total();
+    buffer result = sum.to_html(minutes, true, false);
+    print_html(result);
+}
+
+// ***************************
+//     Spading Completeness  *
+// ***************************
+
+
+// Until we have spaded every tile, some will be unknown: combed or unseen
+// This record has the numeric state and a set of beaches which are not fully spaded.
+
+record beach_state
+{
+    tile_data state;
+    beach_set castle;
+    beach_set combed;
+    beach_set unseen;
+    beach_set unknown;	// combed + unseen
+};
+
+beach_state copy(beach_state orig)
+{
+    beach_state result;
+    result.state = orig.state.copy();
+    result.castle = orig.castle.to_beach_set();
+    result.combed = orig.combed.to_beach_set();
+    result.unseen = orig.unseen.to_beach_set();
+    result.unknown = orig.unknown.to_beach_set();
+    return result;
+}
+
+void add(beach_state result, beach_state two)
+{
+    result.state.add(two.state);
+    result.castle.add_beaches(two.castle);
+    result.combed.add_beaches(two.combed);
+    result.unseen.add_beaches(two.unseen);
+    result.unknown.add_beaches(two.unknown);
+}
+
+void add_tiles(beach_state sum, tile_data data, int minute)
+{
+    sum.state.add(data);
+    if (data.castles > 0) {
+	sum.castle.add_beach(minute);
+    }
+    if (data.combed > 0) {
+	sum.combed.add_beach(minute);
+	sum.unknown.add_beach(minute);
+    }
+    if (data.unseen > 0) {
+	sum.unseen.add_beach(minute);
+	sum.unknown.add_beach(minute);
+    }
+}
+
+// Data for each row
+typedef beach_state[int] row_states;
+
+buffer to_html(row_states array)
+{
+    buffer table;
+
+    void open_table()
+    {
+	table.append("<html>");
+	table.append("<table border=1>");
+    }
+
+    void close_table()
+    {
+	table.append("</table>");
+	table.append("</html>");
+    }
+	    
+    void add_header()
+    {
+	table.append("<tr>");
+	table.append("<th>row</th>");
+	table.append("<th>rare</th>");
+	table.append("<th>uncommon</th>");
+	table.append("<th>common</th>");
+	table.append("<th>head</th>");
+	table.append("<th>castle</th>");
+	table.append("<th>#</th>");
+	table.append("<th>combed</th>");
+	table.append("<th>#</th>");
+	table.append("<th>unseen</th>");
+	table.append("<th>#</th>");
+	table.append("<th>unknown</th>");
+	table.append("<th>#</th>");
+	table.append("</tr>");
+    }
+
+    void add_row(int row)
+    {
+	beach_state data = array[row];
+
+	table.append("<tr>");
+	table.append("<td>");
+	table.append(to_string(row));
+	table.append("</td>");
+	table.append("<td>");
+	table.append(data.state.rares);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(data.state.uncommons);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(data.state.commons);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(data.state.heads);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(data.state.castles);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(to_int(count(data.castle)));
+	table.append("</td>");
+	table.append("<td>");
+	table.append(data.state.combed);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(to_int(count(data.combed)));
+	table.append("</td>");
+	table.append("<td>");
+	table.append(data.state.unseen);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(to_int(count(data.unseen)));
+	table.append("</td>");
+	table.append("<td>");
+	table.append(to_int(data.state.combed + data.state.unseen));
+	table.append("</td>");
+	table.append("<td>");
+	table.append(to_int(count(data.unknown)));
+	table.append("</td>");
+	table.append("</tr>");
+    }
+
+    open_table();
+    add_header();
+    for (int row = 10; row > 0; row--) {
+	add_row(row);
+    }
+    close_table();
+
+    return table;
+}
+
+row_states build_row_data(boolean verbose)
+{
+    row_states row_data;
+
+    // Sanity check: there should be 1,000,000 tiles tallied
+    int rares = 0;
+    int uncommons = 0;
+    int commons = 0;
+    int heads = 0;
+    int castles = 0;
+    int combed = 0;
+    int unseen = 0;
+
+    // 10,000 beaches each with 100 rows
+    // tile_data [int, int] beach_rows;
+
+    print();
+    print("Iterating over 10,000 beaches, 10 rows, 10 columns");
+    for (beach minute = 1; minute <= 10000; minute++) {
+	// Inspect each row on this beach
+	for (int row = 10; row > 0; row--) {
+	    beach_state state = row_data[row];
+	    tile_data tiles;
+	    // Inspect each column on this beach
+	    for (int column = 0; column < 10; column++) {
+		if (rare_tiles_map.contains_tile(minute, row, column)) {
+		    tiles.rares++;
+		    rares++;
+		} else if (uncommon_tiles_map.contains_tile(minute, row, column)) {
+		    tiles.uncommons++;
+		    uncommons++;
+		} else if (beach_head_map.contains_tile(minute, row, column)) {
+		    tiles.heads++;
+		    heads++;
+		} else if (castle_tiles_map.contains_tile(minute, row, column)) {
+		    // *** Do this before commons
+		    tiles.castles++;
+		    castles++;
+		} else if (all_common_tiles_map.contains_tile(minute, row, column)) {
+		    tiles.commons++;
+		    commons++;
+		} else if (combed_tiles_map.contains_tile(minute, row, column)) {
+		    tiles.combed++;
+		    combed++;
+		} else {
+		    tiles.unseen++;
+		    unseen++;
+		}
+	    }
+	    // Save the data for this beach row
+	    // beach_rows[minute, row] = state;
+	    state.add_tiles(tiles, minute);
+	}
+    }
+
+    if (verbose) {
+	print();
+	print("Total rares = " + rares);
+	print("Total uncommons = " + uncommons);
+	print("Total commons = " + commons);
+	print("Total heads = " + heads);
+	print("Total sand castles = " + castles);
+	print("Total combed = " + combed);
+	print("Total unseen = " + unseen);
+	print("Total: " + (rares + uncommons + commons + castles + heads + combed + unseen));
+	print();
+    }
+
+    return row_data;
+}
+
+row_states derive_tidal_data(row_states row_data)
+{
+    row_states tidal_data;
+
+    print();
+    print("Accumulating tidal data for 10 rows");
+    for (int row = 10; row > 0; row--) {
+	beach_state current = row_data[row];
+	tidal_data[row] = current.copy();
+	if (row < 10) {
+	    tidal_data[row].add(tidal_data[row + 1]);
+	}
+    }
+
+    return tidal_data;
+}
+
+void analyze_completeness()
+{
+    // Completeness analysis depends on common tiles
+    parse_commons = true;
+    load_tile_data(false);
+
+    // Total up known and unknown tiles for each row
+    row_states row_data = build_row_data(true);
+
+    print();
+    print_html(row_data.to_html());
+
+    // Accumulate known/unknown tiles for each tide level
+    row_states tidal_data = derive_tidal_data(row_data);
+
+    // Report on what we found
+    print();
+    print_html(tidal_data.to_html());
+}
+
+// Exported function for use in BeachComber:
+// Given already loaded, tile data,
+// Return the tidal data to see which beaches need spading
+row_states calculate_tidal_data()
+{
+    return build_row_data(false).derive_tidal_data();
+}
+
+// ***************************
 //    Beach Set utilities    *
 // ***************************
 
@@ -125,44 +651,11 @@ beach_set unknown_unrare_beaches(beach_set input)
     return input.excluded_beaches(excluded);
 }
 
-// ***************************
-// *       Parameters        *
-// ***************************
-
-boolean verbose = false;
-boolean uncommon = false;
-boolean tides = false;
-boolean combed = false;
-boolean save = false;
-
-// ***************************
-//      Uncommon Tiles       *
-// ***************************
-
-void analyze_uncommon_beaches()
+void analyze_uncommon_beaches(boolean verbose)
 {
-    void load_beach_data()
-    {
-	rare_tiles = load_tiles("tiles.rare.json");
-	rare_tiles_new = load_tiles("tiles.rare.new.json");
-	rare_tiles_errors = load_tiles("tiles.rare.errors.json");
-	rare_tiles_map.clear();
-	rare_tiles_map.add_tiles(rare_tiles);
-	rare_tiles_map.add_tiles(rare_tiles_new);
-	rare_tiles_map.remove_tiles(rare_tiles_errors);
-
-	rare_tiles_verified = load_tiles("tiles.rare.verified.json");
-	rare_tiles_seen = load_tiles("tiles.rare.seen.json");
-	verified_tiles_map.clear();
-	verified_tiles_map.add_tiles(rare_tiles_verified);
-	verified_tiles_map.add_tiles(rare_tiles_seen);
-
-	uncommon_tiles = load_tiles("tiles.uncommon.json");
-	uncommon_tiles_new = load_tiles("tiles.uncommon.new.json");
-	uncommon_tiles_map.clear();
-	uncommon_tiles_map.add_tiles(uncommon_tiles);
-	uncommon_tiles_map.add_tiles(uncommon_tiles_new);
-    }
+    // Don't bother loading commons
+    parse_commons = false;
+    load_tile_data(false);
 
     void print_beach_set(beach_set set) {
 	foreach b in set {
@@ -170,9 +663,7 @@ void analyze_uncommon_beaches()
 	}
     }
 
-    load_beach_data();
-
-    // Find all te beaches that we have not seen an uncommon on
+    // Find all the beaches that we have not seen an uncommon on
     beach_set unknown = all_unknown_uncommon_beaches();
     print(count(unknown).to_string() + " beaches have no known uncommons.");
     if (verbose) {
@@ -202,85 +693,16 @@ void analyze_uncommon_beaches()
 }   
 
 // ***************************
-//       Beach Tides         *
-// ***************************
-
-void analyze_beach_tides()
-{
-    // Look at the map of commons and count how many beaches
-    // Have been inspected at each tide level.
-
-    void load_beach_data()
-    {
-	common_tiles_map = load_tiles_map("tiles.common.json");
-	common_tiles_new_map = load_tiles_map("tiles.common.new.json");
-	all_common_tiles_map.clear();
-	all_common_tiles_map.add_tiles(common_tiles_map);
-	all_common_tiles_map.add_tiles(common_tiles_new_map);
-    }
-
-    load_beach_data();
-
-    int[5] tides;	// row 1-5 are spaded
-    int unknown = 0;	// Anything else
-
-    // all_common_tiles_map is boolean [int, int, int]
-    foreach minutes in all_common_tiles_map {
-	boolean [int,int] slice = all_common_tiles_map[minutes];
-	foreach row in slice {
-	    // Sanity check
-	    if (row < 1 || row > 5) {
-		unknown++;
-		continue;
-	    }
-	    // Increment lowest seen tide
-	    tides[row-1]++;
-	    // We've seen enough of this beach;
-	    break;
-	}
-    }
-
-    print("There are " + all_common_tiles_map.count_beaches() + " beaches with observed commons.");
-    foreach row in tides {
-	print(to_string(tides[row]) + " beaches have been spaded with tides = " + row);
-    }
-    print(to_string(unknown) + " beaches have only seen higher rows");
-}
-
-// ***************************
 //       Combed Tiles        *
 // ***************************
 
-void prune_combed_tiles()
+void prune_combed_tiles(boolean save)
 {
     // Remove all known rares, uncommons, and commons from combed tiles map
 
-    void load_beach_data()
-    {
-	rare_tiles = load_tiles("tiles.rare.json");
-	rare_tiles_new = load_tiles("tiles.rare.new.json");
-	rare_tiles_errors = load_tiles("tiles.rare.errors.json");
-	rare_tiles_map.clear();
-	rare_tiles_map.add_tiles(rare_tiles);
-	rare_tiles_map.add_tiles(rare_tiles_new);
-	rare_tiles_map.remove_tiles(rare_tiles_errors);
-
-	uncommon_tiles = load_tiles("tiles.uncommon.json");
-	uncommon_tiles_new = load_tiles("tiles.uncommon.new.json");
-	uncommon_tiles_map.clear();
-	uncommon_tiles_map.add_tiles(uncommon_tiles);
-	uncommon_tiles_map.add_tiles(uncommon_tiles_new);
-
-	common_tiles_map = load_tiles_map("tiles.common.json");
-	common_tiles_new_map = load_tiles_map("tiles.common.new.json");
-	all_common_tiles_map.clear();
-	all_common_tiles_map.add_tiles(common_tiles_map);
-	all_common_tiles_map.add_tiles(common_tiles_new_map);
-
-	combed_tiles_map = load_tiles_map("tiles.combed.json");
-    }
-
-    load_beach_data();
+    // We need common tiles
+    parse_commons = true;
+    load_tile_data(false);
 
     int original_beaches = combed_tiles_map.count_beaches();
     int original_tiles = combed_tiles_map.count_tiles();
@@ -342,6 +764,13 @@ void prune_combed_tiles()
 
 void main(string... parameters)
 {
+    boolean verbose = false;
+    boolean uncommon = false;
+    boolean combed = false;
+    boolean complete = false;
+    beach minutes = 0;
+    boolean save = false;
+
     void parse_parameters(string... parameters)
     {
 	boolean bogus = false;
@@ -358,13 +787,31 @@ void main(string... parameters)
 	    case "uncommon":
 		uncommon = true;
 		continue;
-	    case "tides":
-		tides = true;
-		parse_commons = true;
-		continue;
 	    case "combed":
 		combed = true;
 		parse_commons = true;
+		continue;
+	    case "complete":
+		complete = true;
+		parse_commons = true;
+		continue;
+	    }
+
+	    if (param.starts_with("minutes=")) {
+		// Describe what we know about a particular beach.
+		int index = param.index_of("=");
+		string value = param.substring(index + 1);
+		minutes = value.is_integer() ? value.to_int() : 0;
+		if (minutes == 0) {
+		    print("How many minutes?", "red");
+		    bogus = true;
+		    continue;
+		}
+		if (minutes < 1 || minutes > 10000) {
+		    print("You can wander from 1 to 10000 minutes down the beach.", "red");
+		    bogus = true;
+		    continue;
+		}
 		continue;
 	    }
 
@@ -387,17 +834,22 @@ void main(string... parameters)
     parse_parameters(params);
 
     if (uncommon) {
-	analyze_uncommon_beaches();
-	return;
-    }
-
-    if (tides) {
-	analyze_beach_tides();
+	analyze_uncommon_beaches(verbose);
 	return;
     }
 
     if (combed) {
-	prune_combed_tiles();
+	prune_combed_tiles(save);
+	return;
+    }
+
+    if (complete) {
+	analyze_completeness();
+	return;
+    }
+
+    if (minutes != 0) {
+	describe_beach(minutes, verbose);
 	return;
     }
 }
