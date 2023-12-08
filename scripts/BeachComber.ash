@@ -1045,11 +1045,6 @@ void beach_completed()
 	    return;
 	}
     }
-    // If we are spading multiple squares, move to next square
-    if (mode == "spade") {
-	spade_last_minutes = ( spade_last_minutes + 1 ) % 10000;
-	return;
-    }
 }
 
 buffer comb_square( coords c, string type )
@@ -1434,13 +1429,6 @@ int next_spaded_beach()
 
     completed = true;
     return 0;
-
-    /*
-    if (spade_last_minutes < 0 || spade_last_minutes >= 10000) {
-	spade_last_minutes = 0;
-    }
-    return spade_last_minutes + 1;
-    */
 }
 
 beach_set all_castle_beaches;

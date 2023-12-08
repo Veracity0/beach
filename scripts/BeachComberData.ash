@@ -576,9 +576,6 @@ static compact_coords_map common_tiles_new_map;	// tiles.common.new.json
 // (local) Combed tiles discovered by spading
 static compact_coords_map combed_tiles_map;	// tiles.combed.json
 
-// (local) The last segment of the beach that we have looked at and started combing.
-static int spade_last_minutes;			// spade.minutes.txt
-
 coords_map rare_tiles_map;
 coords_map verified_tiles_map;
 coords_map uncommon_tiles_map;
@@ -782,8 +779,6 @@ boolean load_tile_data(boolean verbose)
     twinkles_map.clear();
     twinkles_map.add_tiles(twinkle_tiles);
 
-    spade_last_minutes = file_to_buffer(beach_file("spade.minutes.txt")).to_string().to_int();
-
     print("Done loading tile data");
 
     if (verbose) {
@@ -828,7 +823,6 @@ boolean load_tile_data(boolean verbose)
 	print("Beach Heads: " + count(beach_heads));
 	print();
 	print("Unvisited twinkle tiles: " + count(twinkle_tiles));
-	print("Last minutes down the beach spaded: " + spade_last_minutes);
 	print();
 
 	print("Beaches with rare tiles: " + count(rare_tiles_map));
@@ -863,9 +857,6 @@ void save_tile_data()
     // *** Obsolete: the following can be calculated from the sand castle tiles
     sort castle_beaches_seen by value;
     save_beaches(castle_beaches_seen, "beaches.castle.seen.json");
-
-    buffer spade_minutes = to_string(spade_last_minutes);
-    buffer_to_file(spade_minutes, beach_file("spade.minutes.txt"));
 }
 
 // For merging newly discovered tiles into known tile lists.
@@ -1026,16 +1017,55 @@ void merge_tile_data(boolean verbose)
 	save_beaches(castle_beaches_seen, "beaches.castle.seen.json");
     }
 
+    void merge_combed_tiles()
+    {
+	// Combed tiles
+
+	// combed_tiles_map is the set of tiles we detected as rare.
+	// Supposedly, we removed twinkles and rough sand from the map
+	// when we saw them on the map.
+	//
+	// I think there is a bug with removing rares and uncommons, so fix it here
+	//
+	// BeachComberUtilities combed
+	//
+	// rare tiles seen as combed: 33
+	// Combed tiles: 178 -> 145
+	// Combed beaches: 161 -> 129
+
+	int original_count = combed_tiles_map.count_tiles();
+
+	combed_tiles_map.remove_tiles(rare_tiles);
+	combed_tiles_map.remove_tiles(uncommon_tiles);
+	combed_tiles_map.remove_tiles(common_tiles_map);
+	combed_tiles_map.remove_tiles(beach_heads);
+	combed_tiles_map.remove_tiles(castle_tiles);
+
+	int new_count = combed_tiles_map.count_tiles();
+
+	if (verbose) {
+	    print("Original combed tiles: " + original_count);
+	    print("Fixed combed tiles: " + new_count);
+	}
+
+	save_tiles_map(combed_tiles_map, "tiles.combed.json");
+    }
+
     merge_rare_tiles();
     merge_verified_tiles();
     merge_uncommon_tiles();
     if (parse_commons) {
 	merge_common_tiles();
     }
+
     // *** Do this after we merge commons
     merge_castle_tiles();
     // *** Obsolete: the following can be calculated from the sand castle tiles
     merge_castle_beaches();
+
+    // Now that we have merged rares, uncommons, commons, and castles,
+    // remove all of those from combed tiles.
+    merge_combed_tiles();
 }
 
 // For pruning published tile data from your locally discovered tile data.
