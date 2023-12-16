@@ -108,7 +108,7 @@ void print_help()
     print_html("");
     print_html(spaces + "<b>random</b>: visit random sections of the beach" );
     print_html(spaces + "<b>rare</b>: visit only sections of the beach with known rare tiles" );
-    print_html(spaces + "<b>spade</b>: visit only beaches with unseen or combed tiles" );
+    print_html(spaces + "<b>spade</b>: visit only beaches with combed tiles" );
     print_html(spaces + "<b>minutes=NUMBER</b>: visit specific section of the beach" );
     print_html("");
     print_html(spaces + "<b>twinkle</b>: comb rare and unknown twinkly tiles" );
@@ -1045,11 +1045,6 @@ void beach_completed()
 	    return;
 	}
     }
-    // If we are spading multiple squares, move to next square
-    if (mode == "spade") {
-	spade_last_minutes = ( spade_last_minutes + 1 ) % 10000;
-	return;
-    }
 }
 
 buffer comb_square( coords c, string type )
@@ -1404,23 +1399,10 @@ int next_spaded_beach()
 		break;
 	    }
 	}
-	if (rs.state.unseen > 0) {
-	    foreach b in rs.unseen {
-		print("row = " + ri + " unseen = " + rs.state.unseen + " first = " + b);
-		break;
-	    }
-	}
     }
     */
 
     beach_state tidal_row_state = tidal_row_states[tidal_row];
-
-    // If there are unseen beaches, pick the first one
-    if (count(tidal_row_state.unseen) > 0) {
-	int minutes = tidal_row_state.unseen.first_beach();
-	remove tidal_row_state.unseen[minutes];
-	return minutes;
-    }
 
     // If there are combed beaches, pick the first one
     if (count(tidal_row_state.combed) > 0) {
@@ -1434,13 +1416,6 @@ int next_spaded_beach()
 
     completed = true;
     return 0;
-
-    /*
-    if (spade_last_minutes < 0 || spade_last_minutes >= 10000) {
-	spade_last_minutes = 0;
-    }
-    return spade_last_minutes + 1;
-    */
 }
 
 beach_set all_castle_beaches;

@@ -520,6 +520,15 @@ int count_tiles(compact_coords_map map) {
     return count;
 }
 
+beach_set to_beach_set(compact_coords_map map)
+{
+    beach_set result;
+    foreach minutes in map {
+	result[minutes] = true;
+    }
+    return result;
+}
+
 // ***************************
 //      Global Variables     *
 // ***************************
@@ -575,9 +584,6 @@ static compact_coords_map common_tiles_new_map;	// tiles.common.new.json
 
 // (local) Combed tiles discovered by spading
 static compact_coords_map combed_tiles_map;	// tiles.combed.json
-
-// (local) The last segment of the beach that we have looked at and started combing.
-static int spade_last_minutes;			// spade.minutes.txt
 
 coords_map rare_tiles_map;
 coords_map verified_tiles_map;
@@ -752,7 +758,6 @@ boolean load_tile_data(boolean verbose)
 	print("Loading common tile data...");
 	common_tiles_map = load_tiles_map("tiles.common.json");
 	common_tiles_new_map = load_tiles_map("tiles.common.new.json");
-	combed_tiles_map = load_tiles_map("tiles.combed.json");
 	all_common_tiles_map.clear();
 	all_common_tiles_map.add_tiles(common_tiles_map);
 	all_common_tiles_map.add_tiles(common_tiles_new_map);
@@ -770,6 +775,9 @@ boolean load_tile_data(boolean verbose)
     castle_tiles_map.add_tiles(castle_tiles);
     castle_tiles_map.add_tiles(castle_tiles_new);
 
+    print("Loading combed tile data...");
+    combed_tiles_map = load_tiles_map("tiles.combed.json");
+
     // *** Obsolete: the following can be calculated from the sand castle tiles
     castle_beaches = load_beaches("beaches.castle.json");
     castle_beaches_seen = load_beaches("beaches.castle.seen.json");
@@ -781,8 +789,6 @@ boolean load_tile_data(boolean verbose)
     twinkle_tiles = load_tiles("tiles.twinkle.json");
     twinkles_map.clear();
     twinkles_map.add_tiles(twinkle_tiles);
-
-    spade_last_minutes = file_to_buffer(beach_file("spade.minutes.txt")).to_string().to_int();
 
     print("Done loading tile data");
 
@@ -814,33 +820,24 @@ boolean load_tile_data(boolean verbose)
 	int total_common = common_tiles_count + common_tiles_new_count;
 	print("Total: " + total_common);
 
+	print();
+	print("Known sand castles: " + count(castle_tiles));
+	print("New sand castles: " + count(castle_tiles_new));
+	print();
+	print("Beach Heads: " + count(beach_heads));
+	print();
+
 	int combed_tiles_count = combed_tiles_map.count_tiles();
 	print();
 	print("Known combed tiles: " + combed_tiles_count);
 
 	print();
-	print("Known sand castle tiles: " + count(castle_tiles));
-	print("New sand castle tiles: " + count(castle_tiles_new));
-	// *** Obsolete: the following can be calculated from the sand castle tiles
-	print("Known sand castle beaches: " + count(castle_beaches));
-	print("New sand castle beaches: " + count(castle_beaches_seen));
-	print();
-	print("Beach Heads: " + count(beach_heads));
-	print();
-	print("Unvisited twinkle tiles: " + count(twinkle_tiles));
-	print("Last minutes down the beach spaded: " + spade_last_minutes);
-	print();
-
 	print("Beaches with rare tiles: " + count(rare_tiles_map));
 	print("Beaches with verified rare tiles: " + count(verified_tiles_map));
 	print("Beaches with uncommon tiles: " + count(uncommon_tiles_map));
 	print("Beaches with common tiles: " + all_common_tiles_map.count_beaches());
-	print("Beaches with combed tiles: " + combed_tiles_map.count_beaches());
-	print("Beaches with sand castle tiles: " + count(castle_tiles_map));
-	// *** Obsolete: the following can be calculated from the sand castle tiles
-	print("Beaches with sand castles: " + count(castle_beach_set));
+	print("Beaches with sand castles: " + count(castle_tiles_map));
 	print("Beaches with beach heads: " + count(beach_head_map));
-	print("Beaches with unvisited twinkles: " + count(twinkles_map));
 	print();
     }
 
@@ -856,16 +853,13 @@ void save_tile_data()
     save_tiles(uncommon_tiles_new, "tiles.uncommon.new.json");
     if (parse_commons) {
 	save_tiles_map(common_tiles_new_map, "tiles.common.new.json");
-	save_tiles_map(combed_tiles_map, "tiles.combed.json");
     }
+    save_tiles_map(combed_tiles_map, "tiles.combed.json");
     save_tiles(castle_tiles_new, "tiles.castle.new.json");
 
     // *** Obsolete: the following can be calculated from the sand castle tiles
     sort castle_beaches_seen by value;
     save_beaches(castle_beaches_seen, "beaches.castle.seen.json");
-
-    buffer spade_minutes = to_string(spade_last_minutes);
-    buffer_to_file(spade_minutes, beach_file("spade.minutes.txt"));
 }
 
 // For merging newly discovered tiles into known tile lists.
@@ -1026,16 +1020,55 @@ void merge_tile_data(boolean verbose)
 	save_beaches(castle_beaches_seen, "beaches.castle.seen.json");
     }
 
+    void merge_combed_tiles()
+    {
+	// Combed tiles
+
+	// combed_tiles_map is the set of tiles we detected as rare.
+	// Supposedly, we removed twinkles and rough sand from the map
+	// when we saw them on the map.
+	//
+	// I think there is a bug with removing rares and uncommons, so fix it here
+	//
+	// BeachComberUtilities combed
+	//
+	// rare tiles seen as combed: 33
+	// Combed tiles: 178 -> 145
+	// Combed beaches: 161 -> 129
+
+	int original_count = combed_tiles_map.count_tiles();
+
+	combed_tiles_map.remove_tiles(rare_tiles);
+	combed_tiles_map.remove_tiles(uncommon_tiles);
+	combed_tiles_map.remove_tiles(common_tiles_map);
+	combed_tiles_map.remove_tiles(beach_heads);
+	combed_tiles_map.remove_tiles(castle_tiles);
+
+	int new_count = combed_tiles_map.count_tiles();
+
+	if (verbose) {
+	    print("Original combed tiles: " + original_count);
+	    print("Fixed combed tiles: " + new_count);
+	}
+
+	save_tiles_map(combed_tiles_map, "tiles.combed.json");
+    }
+
     merge_rare_tiles();
     merge_verified_tiles();
     merge_uncommon_tiles();
     if (parse_commons) {
 	merge_common_tiles();
     }
+
     // *** Do this after we merge commons
     merge_castle_tiles();
     // *** Obsolete: the following can be calculated from the sand castle tiles
     merge_castle_beaches();
+
+    // Now that we have merged rares, uncommons, commons, and castles,
+    // remove all of those from combed tiles.
+    merge_combed_tiles();
 }
 
 // For pruning published tile data from your locally discovered tile data.
