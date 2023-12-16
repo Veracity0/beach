@@ -520,6 +520,15 @@ int count_tiles(compact_coords_map map) {
     return count;
 }
 
+beach_set to_beach_set(compact_coords_map map)
+{
+    beach_set result;
+    foreach minutes in map {
+	result[minutes] = true;
+    }
+    return result;
+}
+
 // ***************************
 //      Global Variables     *
 // ***************************
@@ -749,7 +758,6 @@ boolean load_tile_data(boolean verbose)
 	print("Loading common tile data...");
 	common_tiles_map = load_tiles_map("tiles.common.json");
 	common_tiles_new_map = load_tiles_map("tiles.common.new.json");
-	combed_tiles_map = load_tiles_map("tiles.combed.json");
 	all_common_tiles_map.clear();
 	all_common_tiles_map.add_tiles(common_tiles_map);
 	all_common_tiles_map.add_tiles(common_tiles_new_map);
@@ -766,6 +774,9 @@ boolean load_tile_data(boolean verbose)
     castle_tiles_map.clear();
     castle_tiles_map.add_tiles(castle_tiles);
     castle_tiles_map.add_tiles(castle_tiles_new);
+
+    print("Loading combed tile data...");
+    combed_tiles_map = load_tiles_map("tiles.combed.json");
 
     // *** Obsolete: the following can be calculated from the sand castle tiles
     castle_beaches = load_beaches("beaches.castle.json");
@@ -809,32 +820,24 @@ boolean load_tile_data(boolean verbose)
 	int total_common = common_tiles_count + common_tiles_new_count;
 	print("Total: " + total_common);
 
+	print();
+	print("Known sand castles: " + count(castle_tiles));
+	print("New sand castles: " + count(castle_tiles_new));
+	print();
+	print("Beach Heads: " + count(beach_heads));
+	print();
+
 	int combed_tiles_count = combed_tiles_map.count_tiles();
 	print();
 	print("Known combed tiles: " + combed_tiles_count);
 
 	print();
-	print("Known sand castle tiles: " + count(castle_tiles));
-	print("New sand castle tiles: " + count(castle_tiles_new));
-	// *** Obsolete: the following can be calculated from the sand castle tiles
-	print("Known sand castle beaches: " + count(castle_beaches));
-	print("New sand castle beaches: " + count(castle_beaches_seen));
-	print();
-	print("Beach Heads: " + count(beach_heads));
-	print();
-	print("Unvisited twinkle tiles: " + count(twinkle_tiles));
-	print();
-
 	print("Beaches with rare tiles: " + count(rare_tiles_map));
 	print("Beaches with verified rare tiles: " + count(verified_tiles_map));
 	print("Beaches with uncommon tiles: " + count(uncommon_tiles_map));
 	print("Beaches with common tiles: " + all_common_tiles_map.count_beaches());
-	print("Beaches with combed tiles: " + combed_tiles_map.count_beaches());
-	print("Beaches with sand castle tiles: " + count(castle_tiles_map));
-	// *** Obsolete: the following can be calculated from the sand castle tiles
-	print("Beaches with sand castles: " + count(castle_beach_set));
+	print("Beaches with sand castles: " + count(castle_tiles_map));
 	print("Beaches with beach heads: " + count(beach_head_map));
-	print("Beaches with unvisited twinkles: " + count(twinkles_map));
 	print();
     }
 
@@ -850,8 +853,8 @@ void save_tile_data()
     save_tiles(uncommon_tiles_new, "tiles.uncommon.new.json");
     if (parse_commons) {
 	save_tiles_map(common_tiles_new_map, "tiles.common.new.json");
-	save_tiles_map(combed_tiles_map, "tiles.combed.json");
     }
+    save_tiles_map(combed_tiles_map, "tiles.combed.json");
     save_tiles(castle_tiles_new, "tiles.castle.new.json");
 
     // *** Obsolete: the following can be calculated from the sand castle tiles
