@@ -738,7 +738,7 @@ boolean load_tile_data(boolean verbose)
     rare_tiles_map.add_tiles(rare_tiles_new);
     rare_tiles_map.remove_tiles(rare_tiles_errors);
 
-    print("Loading verified tile data...");
+    print("Loading verified rare tile data...");
     rare_tiles_verified = load_tiles("tiles.rare.verified.json");
     rare_tiles_seen = load_tiles("tiles.rare.seen.json");
     verified_tiles_map.clear();
@@ -821,10 +821,11 @@ boolean load_tile_data(boolean verbose)
 	print("Total: " + total_common);
 
 	print();
+	print("Beach Heads: " + count(beach_heads));
+
+	print();
 	print("Known sand castles: " + count(castle_tiles));
 	print("New sand castles: " + count(castle_tiles_new));
-	print();
-	print("Beach Heads: " + count(beach_heads));
 	print();
 
 	int combed_tiles_count = combed_tiles_map.count_tiles();
@@ -836,8 +837,9 @@ boolean load_tile_data(boolean verbose)
 	print("Beaches with verified rare tiles: " + count(verified_tiles_map));
 	print("Beaches with uncommon tiles: " + count(uncommon_tiles_map));
 	print("Beaches with common tiles: " + all_common_tiles_map.count_beaches());
-	print("Beaches with sand castles: " + count(castle_tiles_map));
 	print("Beaches with beach heads: " + count(beach_head_map));
+	print("Beaches with sand castles: " + count(castle_tiles_map));
+	print("Beaches with combed tiles: " + count(combed_tiles_map));
 	print();
     }
 

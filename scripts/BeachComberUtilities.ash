@@ -67,6 +67,8 @@ record tile_data
     int heads;
     int castles;
     int combed;
+    // Additional statistics
+    int unverified;
 };
 
 // That data structure can be used in multiple ways:
@@ -85,6 +87,7 @@ tile_data copy(tile_data orig)
     result.heads = orig.heads;
     result.castles = orig.castles;
     result.combed = orig.combed;
+    result.unverified = orig.unverified;
     return result;
 }
 
@@ -97,6 +100,7 @@ void add(tile_data result, tile_data two)
     result.heads += two.heads;
     result.castles += two.castles;
     result.combed += two.combed;
+    result.unverified += two.unverified;
 }
 
 buffer tile_data_header(buffer table, boolean rows)
@@ -108,6 +112,7 @@ buffer tile_data_header(buffer table, boolean rows)
 	table.append("<th>minutes</th>");
     }
     table.append("<th>rare</th>");
+    table.append("<th>(unverified)</th>");
     table.append("<th>uncommon</th>");
     table.append("<th>common</th>");
     table.append("<th>head</th>");
@@ -127,6 +132,9 @@ buffer to_html(tile_data data, int id, boolean header, boolean rows, buffer tabl
 	table.append("</td>");
 	table.append("<td>");
 	table.append(data.rares);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(data.unverified);
 	table.append("</td>");
 	table.append("<td>");
 	table.append(data.uncommons);
@@ -185,6 +193,9 @@ beach_data beach_rows(int minutes)
 	for (int column = 0; column < 10; column++) {
 	    if (rare_tiles_map.contains_tile(minutes, row, column)) {
 		tiles.rares++;
+		if (!verified_tiles_map.contains_tile(minutes, row, column)) {
+		    tiles.unverified++;
+		}
 	    } else if (uncommon_tiles_map.contains_tile(minutes, row, column)) {
 		tiles.uncommons++;
 	    } else if (beach_head_map.contains_tile(minutes, row, column)) {
@@ -224,6 +235,9 @@ buffer to_html(beach_data data, int id)
 	table.append("</td>");
 	table.append("<td>");
 	table.append(data[row].rares);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(data[row].unverified);
 	table.append("</td>");
 	table.append("<td>");
 	table.append(data[row].uncommons);
@@ -304,6 +318,7 @@ record beach_state
     tile_data state;
     beach_set castle;
     beach_set combed;
+    beach_set unverified;
 };
 
 beach_state copy(beach_state orig)
@@ -312,6 +327,7 @@ beach_state copy(beach_state orig)
     result.state = orig.state.copy();
     result.castle = orig.castle.to_beach_set();
     result.combed = orig.combed.to_beach_set();
+    result.unverified = orig.unverified.to_beach_set();
     return result;
 }
 
@@ -320,6 +336,7 @@ void add(beach_state result, beach_state two)
     result.state.add(two.state);
     result.castle.add_beaches(two.castle);
     result.combed.add_beaches(two.combed);
+    result.unverified.add_beaches(two.unverified);
 }
 
 void add_tiles(beach_state sum, tile_data data, int minute)
@@ -330,6 +347,9 @@ void add_tiles(beach_state sum, tile_data data, int minute)
     }
     if (data.combed > 0) {
 	sum.combed.add_beach(minute);
+    }
+    if (data.unverified > 0) {
+	sum.unverified.add_beach(minute);
     }
 }
 
@@ -357,13 +377,15 @@ buffer to_html(row_states array)
 	table.append("<tr>");
 	table.append("<th>row</th>");
 	table.append("<th>rare</th>");
+	table.append("<th>(unverified</th>");
+	table.append("<th>#)</th>");
 	table.append("<th>uncommon</th>");
 	table.append("<th>common</th>");
 	table.append("<th>head</th>");
 	table.append("<th>castle</th>");
 	table.append("<th>#</th>");
-	table.append("<th>combed</th>");
-	table.append("<th>#</th>");
+	table.append("<th>(combed</th>");
+	table.append("<th>#)</th>");
 	table.append("</tr>");
     }
 
@@ -377,6 +399,12 @@ buffer to_html(row_states array)
 	table.append("</td>");
 	table.append("<td>");
 	table.append(data.state.rares);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(data.state.unverified);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(to_int(count(data.unverified)));
 	table.append("</td>");
 	table.append("<td>");
 	table.append(data.state.uncommons);
@@ -423,6 +451,7 @@ row_states build_row_data(boolean verbose)
     int heads = 0;
     int castles = 0;
     int combed = 0;
+    int unverified = 0;
     int unseen = 0;
 
     // 10,000 beaches each with 100 rows
@@ -440,6 +469,10 @@ row_states build_row_data(boolean verbose)
 		if (rare_tiles_map.contains_tile(minute, row, column)) {
 		    tiles.rares++;
 		    rares++;
+		    if (!verified_tiles_map.contains_tile(minute, row, column)) {
+			tiles.unverified++;
+			unverified++;
+		    }
 		} else if (uncommon_tiles_map.contains_tile(minute, row, column)) {
 		    tiles.uncommons++;
 		    uncommons++;
@@ -471,6 +504,7 @@ row_states build_row_data(boolean verbose)
     if (verbose) {
 	print();
 	print("Total rares = " + rares);
+	print("(Unverified rares = " + unverified + ")");
 	print("Total uncommons = " + uncommons);
 	print("Total commons = " + commons);
 	print("Total beach heads = " + heads);
