@@ -1145,6 +1145,14 @@ buffer comb_beach( buffer page )
 	    if (all_common_tiles_map.contains_tile(tile)) {
 		continue;
 	    }
+	    // If the tile is a known sand castle, skip it.
+	    if (castle_tiles_map.contains_tile(tile)) {
+		continue;
+	    }
+	    // If the tile is a beach head, skip it.
+	    if (beach_head_map.contains_tile(tile)) {
+		continue;
+	    }
 	    combed_tiles_map.add_tile(tile);
 	}
     }
@@ -1325,10 +1333,19 @@ buffer comb_beach( buffer page )
     return page;
 }
 
+// Forward reference
+void comb_spaded_beach();
+
 buffer comb_specific_beach( int minutes )
 {
     buffer page = run_choice( 1, "minutes=" + minutes );
     current_beach = get_minutes();
+
+    // Remove from set of spaded beaches only if we actually combed it;
+    if (mode == "spade") {
+	comb_spaded_beach();
+    }
+
     return comb_beach( page );
 }
 
@@ -1407,7 +1424,6 @@ int next_spaded_beach()
     // If there are combed beaches, pick the first one
     if (count(tidal_row_state.combed) > 0) {
 	int minutes = tidal_row_state.combed.first_beach();
-	remove tidal_row_state.combed[minutes];
 	return minutes;
     }
 
@@ -1416,6 +1432,20 @@ int next_spaded_beach()
 
     completed = true;
     return 0;
+}
+
+void comb_spaded_beach()
+{
+    // Only remove it from set of combed beaches if we actually combed it;
+    // if we are out of free combs for the day, we'll put away the comb
+    // without combing if we detect that.
+
+    int minutes = current_beach;
+
+    int tides = get_tides();
+    int tidal_row = tides + 1;
+    beach_state tidal_row_state = tidal_row_states[tidal_row];
+    remove tidal_row_state.combed[minutes];
 }
 
 beach_set all_castle_beaches;
