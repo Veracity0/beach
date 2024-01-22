@@ -703,8 +703,15 @@ void analyze_uncommon_beaches(boolean verbose)
 //       Combed Tiles        *
 // ***************************
 
-void prune_combed_tiles(boolean save)
+void prune_combed_tiles(boolean save, boolean verbose)
 {
+    void print_tiles(compact_coords_map map)
+    {
+	foreach min, row, col in map {
+	    print("&nbsp;&nbsp;&nbsp;&nbsp;(" + min + "," + row + "," + (col + 1) + ")");
+	}
+    }
+
     // Remove all known rares, uncommons, and commons from combed tiles map
 
     // We need common tiles
@@ -761,7 +768,17 @@ void prune_combed_tiles(boolean save)
 	    save_tiles_map(combed_tiles_map, "tiles.combed.json");
 	}
     } else {
-	print("There are " + original_tiles + " unknown combed tiles on " + original_beaches + " beaches.");
+	print("There " +
+	      (original_tiles == 1 ? "is " : "are ") +
+	      original_tiles +
+	      " unknown combed " +
+	      (original_tiles == 1 ? "tile on " : "tiles on ") +
+	      original_beaches +
+	      (original_beaches == 1 ? " beach." : " beaches."));
+    }
+
+    if (new_tiles > 0 && verbose) {
+	    print_tiles(combed_tiles_map);
     }
 }
 
@@ -846,7 +863,7 @@ void main(string... parameters)
     }
 
     if (combed) {
-	prune_combed_tiles(save);
+	prune_combed_tiles(save, verbose);
 	return;
     }
 
