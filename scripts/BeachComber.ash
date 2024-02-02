@@ -49,47 +49,20 @@ typedef boolean [string] string_set;
 // All properties used directly by this script start with "VBC."
 //-------------------------------------------------------------------------
 
-// Square picking strategy:
-//
-// first	pick only the single best patch to comb on a beach.
-// twinkle	comb all twinkles on a beach before moving on.
-
-string pick_strategy = define_property( "VBC.PickStrategy", "string", "first" );
-
 // ***************************
 //        Validatation       *
 // ***************************
-
-static string_set priority_options = $strings[
-    ?,
-    C,
-    H,
-    W,
-    c,
-    r,
-    t,
-];
-
-static string_set strategy_options = $strings[
-    first,
-    twinkle
-];
 
 void validate_configuration()
 {
     boolean valid = true;
 
+    // *** There are actually no configurable options any more
+    if (valid) {
+	return;
+    }
+
     print( "Validating configuration." );
-
-    // Migrate settings.
-    if (pick_strategy == "random") {
-	set_property("VBC.PickStrategy", "first");
-    }
-
-    if ( !( strategy_options contains pick_strategy ) ) {
-	print( "VBC.PickStrategy: '" + pick_strategy + "' is invalid.", "red" );
-	valid = false;
-    }
 
     if ( !valid ) {
 	abort( "Correct those errors and try again." );
@@ -108,12 +81,8 @@ void print_help()
     print_html("");
     print_html(spaces + "<b>random</b>: visit random sections of the beach" );
     print_html(spaces + "<b>rare</b>: visit only sections of the beach with known rare tiles" );
-    print_html(spaces + "<b>spade</b>: visit only beaches with combed tiles" );
+    print_html(spaces + "<b>spade</b>: visit only beaches with unverified rare tiles" );
     print_html(spaces + "<b>minutes=NUMBER</b>: visit specific section of the beach" );
-    print_html("");
-    print_html(spaces + "<b>twinkle</b>: comb rare and unknown twinkly tiles" );
-    print_html(spaces + "<b>first</b>: comb only the best tile" );
-    print_html(spaces + "(the above will comb rough sand if there are no better candidates)" );
     print_html("");
     print_html(spaces + "<b>help</b>: print this message" );
     print_html(spaces + "<b>data</b>: load, analyze, and print tile data, and then exit" );
@@ -123,14 +92,9 @@ void print_help()
 // Mode for selecting sections of the beach to visit
 // 
 // random       Walk randomly down the beach and comb tiles
-// rare         Walk to beach sections that are known to have rare tiles.
-// spade        Walk to next unspaded section of the beach
+// rare         Walk to beach sections that have known rare tiles.
+// spade        Walk to beach sections that have unverified rare tiles.
 // minutes=N    Walk N minutes down the beach and comb only that square.
-//
-// Strategy for picking tiles to comb in a beach section before wandering somewhere else
-//
-// twinkle      Comb all tiles with a twinkle in a beach section
-// known        Comb all uncombed rare tiles (or the first tile with a twinkle)
 //
 // Specification of how many turns to spend combing tiles
 //
@@ -145,28 +109,20 @@ void print_help()
 // If "tidal", we will first consider rare tiles that are the closest to the water,
 // since if the tides are receding, that row was just uncovered today.
 //
-// If "unpublished", we will then look for rare tiles which we have not yet published
-//
 // If "unverified", we will then look for rare tiles which have not yet been verified.
 //
 // Interactions:
 //
-// If "spade", strategy will be "twinkle": comb all twinkles before
-// moving to the (numerically) next section of the beach.
-//
 // If minutes=N, only the specified section of the beach will be visited.
-// As many turns as necessary will be used to comb all the "twinkle" tiles.
+// As many turns as necessary will be used to comb all unknown or rare "twinkle" tiles.
 // After that is completed, execution ends; we will not visit another section.
 
 boolean twinkle_vision = get_property("hasTwinkleVision").to_boolean();
 string mode = "rare";
-string strategy = "known";
 int turns = 0;
 beach minutes = 0;
 boolean tidal = false;
-boolean unpublished = false;
 boolean unverified = false;
-boolean castle = false;
 boolean completed = false;
 
 void parse_parameters(string... parameters)
@@ -205,47 +161,28 @@ void parse_parameters(string... parameters)
 	case "random":
 	    // We don't care. Let KoL pick one for us.
 	    mode = "random";
-	    pick_strategy = "twinkle";
+	    // If we see more than one rare twinkle, get them all.
 	    continue;
 	case "rare":
 	    // Go only to beaches where rares have been reported.
 	    // Just like everybody else. Let the fastest comber win.
 	    // Derby style! Good luck!
 	    mode = "rare";
-	    pick_strategy = "first";
+	    // If we see more than one rare twinkle, get them all.
 	    continue;
 	case "spade":
-	    // We want to methodically visit all the beaches in order to discover
-	    // new tile data - potentially including unpublished rares
+	    // Go only to beaches where rares have been reported that we
+	    // have not yet verified. Stop when we run out.
 	    mode = "spade";
+	    unverified = true;
+	    // *** Is this necessary?
 	    parse_commons = true;
-	    pick_strategy = "twinkle";
-	    continue;
-	case "castle":
-	    // We now want to collect tiles for sand castles, not just beaches
-	    mode = "castle";
-	    pick_strategy = "first";
-	    continue;
-
-        // Strategies for handling unknown twinkles
-	case "first":
-	    // Pick only the first.
-	    pick_strategy = "first";
-	    continue;
-	case "twinkle":
-	case "twinkles":
-	    // Pick all of them. Mini-spading.
-	    pick_strategy = "twinkle";
 	    continue;
 
         // Strategies for selecting rare tiles
 	case "tidal":
 	    // Look first at the row which is next to the water.
 	    tidal = true;
-	    continue;
-	case "unpublished":
-	    // Look first for tiles we have discovered but not yet published
-	    unpublished = true;
 	    continue;
 	case "unverified":
 	    // Look first for published tiles we have not yet verified
@@ -276,7 +213,6 @@ void parse_parameters(string... parameters)
 		continue;
 	    }
 	    mode = "beach";
-	    pick_strategy = "twinkle";
 	    continue;
 	}
 
@@ -459,7 +395,7 @@ void save_visited_tile(coords tile, string tile_type) {
     }
 
     // If we previously saw this as "combed", it no longer is.
-    combed_tiles_map.remove_tile(tile);
+    combed_tiles.remove_tile(tile);
     int key = tile.to_key();
     switch (tile_type) {
     case "rare":
@@ -684,7 +620,6 @@ boolean filter_rare_tiles(boolean verbose)
 {
     // We have three criteria for pruning rare tiles:
     // First visit rare tiles that are next to the water.
-    // If none, visit unpublished rare tiles.
     // If none, visit unverified rare tiles.
     // Otherwise, all rare tiles are game.
 
@@ -748,43 +683,6 @@ boolean filter_rare_tiles(boolean verbose)
 	return dry > 0;
     }
 
-    boolean filter_published()
-    {
-	// Return true if we filtered out published tiles
-
-	// If we don't care about published tides, do not filter on them
-	if (!unpublished) {
-	    return false;
-	}
-
-	// If we don't have any unpublished tiles, do not filter on them
-	if (rare_tiles_new.count() == 0) {
-	    return false;
-	}
-
-	coords_list available_new_tiles;
-	int kept = 0;
-	foreach key, coords in candidates {
-	    if (rare_tiles_new contains coords.to_key()) {
-		available_new_tiles.add_tile(coords);
-		kept++;
-	    }
-	}
-
-	// If none of our unpublished tiles is available, do not filter on them.
-	if (kept == 0) {
-	    return false;
-	}
-
-	// If there are some available new tiles, that is the new filtered list
-	candidates = available_new_tiles;
-	if (verbose) {
-	    print(kept + " unpublished tiles are candidates for combing");
-	}
-
-	return true;
-    }
-
     boolean filter_unverified()
     {
 	// Return true if we filtered out unverified tiles
@@ -818,7 +716,7 @@ boolean filter_rare_tiles(boolean verbose)
     }
 
     // Return true if any filter removed tiles.
-    boolean filtered =  filter_tides() || filter_published() || filter_unverified();
+    boolean filtered =  filter_tides() || filter_unverified();
     filtered_rare_tiles = candidates.flatten();
     return filtered;
 }
@@ -903,11 +801,6 @@ coords pick_coords_to_comb( int beach, sorted_beach_map map )
     if (count(twinkles) > 0) {
 	// Our TwinkleVision™ kicked in.
 	twinkle_vision = true;
-
-	// Remove any which were previously known as "combed"
-	foreach key, c in twinkles {
-	    combed_tiles_map.remove_tile(c);
-	}
 
 	// 2) Look for a rare
 	foreach key, c in known_rares {
@@ -1019,18 +912,28 @@ void beach_completed()
 	completed = true;
 	return;
     }
-    // If we are looking for rares and none are left, we're done
-    if (mode == "rare") {
+
+    // If we are spading, we are looking only at unverified rares
+    if (mode == "spade") {
 	// If we've run out of rare tiles but were checking only the row
 	// next to the water, remove that limitation and recalculate.
 	if (filtered_rare_tiles.count() == 0 && tidal) {
 	    tidal = false;
 	    filter_rare_tiles(true);
 	}
-	// If we've run out of rare tiles but were checking unpublished
-	// rares, remove that limitation and recalculate.
-	if (filtered_rare_tiles.count() == 0 && unpublished) {
-	    unpublished = false;
+	// If we've run out of unverified rare tiles, we're done
+	if (filtered_rare_tiles.count() == 0) {
+	    completed = true;
+	    return;
+	}
+    }
+
+    // If we are looking for rares and none are left, we're done
+    if (mode == "rare") {
+	// If we've run out of rare tiles but were checking only the row
+	// next to the water, remove that limitation and recalculate.
+	if (filtered_rare_tiles.count() == 0 && tidal) {
+	    tidal = false;
 	    filter_rare_tiles(true);
 	}
 	// If we've run out of unverified rare tiles but were
@@ -1129,40 +1032,6 @@ buffer comb_beach( buffer page )
 	}
     }
 
-    void add_combed(string type)
-    {
-	coords_list tiles = map[type];
-	foreach n, tile in tiles {
-	    // If the tile is a known rare, skip it.
-	    if (rare_tiles_map.contains_tile(tile)) {
-		continue;
-	    }
-	    // If the tile is a known uncommon, skip it.
-	    if (uncommon_tiles_map.contains_tile(tile)) {
-		continue;
-	    }
-	    // If the tile is a known common, skip it.
-	    if (all_common_tiles_map.contains_tile(tile)) {
-		continue;
-	    }
-	    // If the tile is a known sand castle, skip it.
-	    if (castle_tiles_map.contains_tile(tile)) {
-		continue;
-	    }
-	    // If the tile is a beach head, skip it.
-	    if (beach_head_map.contains_tile(tile)) {
-		continue;
-	    }
-	    combed_tiles_map.add_tile(tile);
-	}
-    }
-
-    void remove_combed(string type)
-    {
-	coords_list tiles = map[type];
-	combed_tiles_map.remove_tiles(tiles);
-    }
-
     // If you have TwinkleVision™, rough sand is common
     if (twinkle_vision) {
 	add_commons("r");
@@ -1185,20 +1054,8 @@ buffer comb_beach( buffer page )
     // A beach head is not, but it is not uncommon or rare
     // add_commons("H");
 
-    // Remove formerly combed tiles
-    remove_combed("t");	// twinkles
-    remove_combed("r");	// rough sand
-    remove_combed("C");	// sand castle
-    remove_combed("H");	// beach head
-    remove_combed("W");	// beached whale
-
-    // Add currently combed tiles
-    if (parse_commons) {
-	add_combed("c");
-    }
-
     // Now that we have the beach map, see how many rows are covered by waves
-    if (mode == "rare" && check_tides(true)) {
+    if ((mode == "rare" || mode == "spade") && check_tides(true)) {
 	// Now that we know the tides, refilter available rare tiles
 	filter_rare_tiles(true);
     }
@@ -1211,7 +1068,6 @@ buffer comb_beach( buffer page )
 
     // Save previously unvisited twinkles
     coords_list unknowns = unknown_twinkles( minutes, twinkles );
-    twinkle_tiles.add_tiles(unknowns);
 
     // Check known rares on this beach and remove if not available
     prune_known_rares(minutes, map);
@@ -1250,11 +1106,10 @@ buffer comb_beach( buffer page )
 
     // Remove the newly combed tile from previously unknown twinkles
     int key = c.to_key();
-    remove twinkle_tiles[key];
     remove unknowns[key];
 
     // If we were looking for rares and found one, update
-    if (mode == "rare" && type == "rare") {
+    if ((mode == "rare" || mode == "spade") && (type == "rare")) {
 	rare_tiles_combed.add_tile(c);
 	// If we knew this was rare...
 	if (available_rare_tiles contains c.to_key()) {
@@ -1267,7 +1122,7 @@ buffer comb_beach( buffer page )
 
     // We don't intentionally farm more than once in a beach segment
     // with no unknown twinkles.
-    if (pick_strategy == "first" || count(unknowns) == 0) {
+    if (count(unknowns) == 0) {
 	beach_completed();
     }
 
@@ -1333,19 +1188,10 @@ buffer comb_beach( buffer page )
     return page;
 }
 
-// Forward reference
-void comb_spaded_beach();
-
 buffer comb_specific_beach( int minutes )
 {
     buffer page = run_choice( 1, "minutes=" + minutes );
     current_beach = get_minutes();
-
-    // Remove from set of spaded beaches only if we actually combed it;
-    if (mode == "spade") {
-	comb_spaded_beach();
-    }
-
     return comb_beach( page );
 }
 
@@ -1361,7 +1207,7 @@ int next_rare_beach()
 {
     // If we just combed a beach and it still has twinkles,
     // perhaps we want to look at them
-    if (current_beach != 0 && pick_strategy == "twinkle") {
+    if (current_beach != 0) {
 	return current_beach;
     }
 
@@ -1379,8 +1225,8 @@ int next_rare_beach()
 
 int next_random_beach()
 {
-    // We'll go to random beachs, but might visit all twinkles
-    if ( pick_strategy == "first" || current_beach == 0 ) {
+    // We'll go to random beaches, but might visit all twinkles
+    if ( current_beach == 0 ) {
 	return 0;
     }
     return current_beach;
@@ -1390,87 +1236,18 @@ row_states tidal_row_states;
 
 int next_spaded_beach()
 {
-    int next_beach = 0;
-    int tides = get_tides();
+    // This is like "rare tidal unverified", but it stops after
+    // unverified rares have run out.
 
-    // If we don't know the tides, pick an unverified rare
-    // If we don't know the tides, pick a random rare
-
-    // If we don't know the tides, pick a random beach
-    if (tides == -1) {
-	return 0;
+    int size = filtered_rare_tiles.count();
+    if (size > 0) {
+	int index = (size == 1) ? 0 : random(size);
+	coords tile = filtered_rare_tiles[index];
+	print("Looking for rare tile at " + tile);
+	return tile.minute;
     }
 
-    int tidal_row = tides + 1;
-
-    // If we have not called calculate_tidal_data(), do so
-    if (tidal_row_states[tidal_row].state.commons == 0) {
-	tidal_row_states = calculate_tidal_data();
-    }
-
-    /*
-    foreach ri, rs in tidal_row_states {
-	if (rs.state.combed > 0) {
-	    foreach b in rs.combed {
-		print("row = " + ri + " combed = " + rs.state.combed + " first = " + b);
-		break;
-	    }
-	}
-    }
-    */
-
-    beach_state tidal_row_state = tidal_row_states[tidal_row];
-
-    // If there are combed beaches, pick the first one
-    if (count(tidal_row_state.combed) > 0) {
-	int minutes = tidal_row_state.combed.first_beach();
-	return minutes;
-    }
-
-    // Otherwise, spading is done for the day.
-    // Set completed to true.
-
-    completed = true;
-    return 0;
-}
-
-void comb_spaded_beach()
-{
-    // Only remove it from set of combed beaches if we actually combed it;
-    // if we are out of free combs for the day, we'll put away the comb
-    // without combing if we detect that.
-
-    int minutes = current_beach;
-
-    int tides = get_tides();
-    int tidal_row = tides + 1;
-    beach_state tidal_row_state = tidal_row_states[tidal_row];
-    remove tidal_row_state.combed[minutes];
-}
-
-beach_set all_castle_beaches;
-
-int next_castle_beach()
-{
-    static boolean castle_beaches_initialized = false;
-    // Make a copy
-    if (!castle_beaches_initialized) {
-	all_castle_beaches = castle_beaches.to_beach_set();
-	castle_beaches_initialized = true;
-    }
-
-    int next_beach = 0;
-
-    // If there are unseen beaches, pick the first one
-    if (count(all_castle_beaches) > 0) {
-	int minutes = all_castle_beaches.first_beach();
-	remove all_castle_beaches[minutes];
-	return minutes;
-    }
-
-    // Otherwise, we are done visiting castles for the day.
-    // Set completed to true.
-
+    // We're done looking at unverified rares
     completed = true;
     return 0;
 }
@@ -1491,13 +1268,8 @@ int pick_next_beach()
     // Based on "mode"
     //  "random"	Go to a new beach every time
     //  "rare"		Go to a beach with known rare tiles
-    //  "spade"		Go next beach we are spading
-    //  "castle"	Go next beach with a sand castle
+    //  "spade"		Go to next beach we are spading
     //  "beach"		Go to specified beach we are spading
-    //
-    // Based on "pick_strategy"
-    //  "first"		Visit at most one tile
-    //  "twinkle"	Visit all twinkles
 
     switch (mode) {
     case "random":
@@ -1506,8 +1278,6 @@ int pick_next_beach()
 	return next_rare_beach();
     case "spade":
 	return next_spaded_beach();
-    case "castle":
-	return next_castle_beach();
     case "beach":
 	return minutes;
     }
@@ -1716,7 +1486,7 @@ void main(string... parameters )
     }
 
     // If the user wants to comb rare tiles, set up helpful data structures
-    if (mode == "rare") {
+    if (mode == "rare" || mode == "spade") {
 	// Make a list of all currently known rare tiles
 	prepare_rare_tiles(true);
 	// Remove all which are currently under water
