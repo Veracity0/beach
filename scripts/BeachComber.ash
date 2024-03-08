@@ -148,6 +148,10 @@ void parse_parameters(string... parameters)
 	    // Undocumented; for my use only
 	    mode = "merge";
 	    continue;
+	case "export":
+	    // Undocumented; for my use only
+	    mode = "export";
+	    continue;
 
 	// How many turns to spend combing
 	case "free":
@@ -1458,6 +1462,19 @@ void main(string... parameters )
 	load_tile_data(true);
 	print("Merging tile data...");
 	merge_tile_data(true);
+	exit;
+    }
+
+    // For exporting tile data into compact "rarities" file
+    // Undocumented; for my use only!
+    if (mode == "export") {
+	// Don't need to load commons, since that is default.
+	parse_commons = false;
+	print("Loading tile data...");
+	load_tile_data(true);
+	print("Exporting tile data...");
+	export_tiles(true);
+	print("Done!");
 	exit;
     }
 
