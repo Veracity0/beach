@@ -264,8 +264,8 @@ coords to_coords( int key )
 {
     key -= 1;
     int minute = ( key / 100 ) + 1;
-    int row = ( key / 10 ) % 100 + 1;
-    int column = ( key % 100 );
+    int row = ( key / 10 ) % 10 + 1;
+    int column = ( key % 10 );
     return new coords( minute, row, column );
 }
 
@@ -593,6 +593,156 @@ compact_coords_map all_common_tiles_map;
 beach_set castle_beach_set;
 
 // ***************************
+//         Rarity Map        *
+// ***************************
+
+// A map from (int) key -> (string) rarity
+// "combed" is unverified "rare" and will become extinct once all rares are verified.
+
+typedef string rarity;
+
+// If only ASH had enums...
+static rarity TILE_COMMON = "common";
+static rarity TILE_UNCOMMON = "uncommon";
+static rarity TILE_RARE = "rare";
+static rarity TILE_HEAD = "head";
+static rarity TILE_CASTLE = "castle";
+static rarity TILE_COMBED = "combed";
+
+// A tile's "key" goes from 1-1000000.
+// More efficient to use an array with indices 0-999999
+typedef rarity[1000000] rarity_map;
+
+rarity_map populate_rarity_map()
+{
+    rarity categorize(coords tile)
+    {
+	if (beach_head_map.contains_tile(tile)) {
+	    return TILE_HEAD;
+	}
+	if (castle_tiles_map.contains_tile(tile)) {
+	    return TILE_CASTLE;
+	}
+	// Since combed tiles are assumed to be rare, they also appear
+	// in rare_tiles_map.
+	if (combed_tiles_map.contains_tile(tile)) {
+	    return TILE_COMBED;
+	}
+	if (rare_tiles_map.contains_tile(tile)) {
+	    return TILE_RARE;
+	}
+	if (uncommon_tiles_map.contains_tile(tile)) {
+	    return TILE_UNCOMMON;
+	}
+	// Anything else is a "common" tile.
+	return TILE_COMMON;
+    }
+
+    rarity_map result;
+
+    for (int key = 1; key <= 1000000; ++key) {
+	coords tile = to_coords(key);
+	result[key - 1] = tile.categorize();
+    }
+
+    return result;
+}
+
+void populate_from_rarity_map(rarity_map tiles)
+{
+    for (int key = 1; key <= 1000000; ++key) {
+	coords tile = to_coords(key);
+	rarity type = tiles[key - 1];
+	switch (type) {
+	case TILE_HEAD:
+	    beach_head_map.add_tile(tile);
+	    break;
+	case TILE_CASTLE:
+	    castle_tiles_map.add_tile(tile);
+	    break;
+	case TILE_COMMON:
+	    all_common_tiles_map.add_tile(tile);
+	    break;
+	case TILE_UNCOMMON:
+	    uncommon_tiles_map.add_tile(tile);
+	    break;
+	case TILE_RARE:
+	    rare_tiles_map.add_tile(tile);
+	    verified_tiles_map.add_tile(tile);
+	    break;
+	case TILE_COMBED:
+	    rare_tiles_map.add_tile(tile);
+	    combed_tiles_map.add_tile(tile);
+	    break;
+	}
+    }
+}
+
+buffer rarity_map_to_json(rarity_map tiles)
+{
+    buffer result;
+    result.append("[");
+    string comma = "";
+    for (int key = 0; key < 1000000; ++key) {
+	result.append(comma);
+	comma = ",";
+	result.append("\n  ");
+	result.append(to_json(tiles[key]));
+    }
+    result.append("\n]");
+    return result;
+}
+
+string rarity_map_to_ash_map(rarity_map tiles)
+{
+    buffer result;
+    for (int key = 0; key < 1000000; ++key) {
+	result.append(to_string(key + 1));
+	result.append("\t");
+	result.append(tiles[key]);
+	result.append("\n");
+    }
+    return result.to_string();
+}
+
+rarity_map to_rarity_map(string[int] map)
+{
+    rarity make_rarity(string value)
+    {
+	// Reduce memory usage by using constants.
+	// If only ASH had enums...
+	switch (value) {
+	case TILE_COMMON: return TILE_COMMON;
+	case TILE_UNCOMMON: return TILE_UNCOMMON;
+	case TILE_RARE: return TILE_RARE;
+	case TILE_HEAD: return TILE_HEAD;
+	case TILE_CASTLE: return TILE_CASTLE;
+	case TILE_COMBED: return TILE_COMBED;
+	}
+	return "";
+    }
+
+    rarity_map result;
+    foreach key, value in map {
+	// Sanity check
+	if (key < 1 || key > 1000000) {
+	    continue;
+	}
+	result[key - 1] = make_rarity(value);
+    }
+    return result;
+}
+
+string[int] to_ash_map(rarity_map rarities)
+{
+    string[int] result;
+    for (int key = 0; key < 1000000; ++key) {
+	result[key + 1] = rarities[key];
+    }
+    return result;
+}
+
+// ***************************
 //         JSON format       *
 // ***************************
 
@@ -718,6 +868,21 @@ beach_list load_beaches(string filename)
 void save_beaches(beach_list data, string filename)
 {
     data.beach_list_to_json().buffer_to_file(beach_file(filename));
+}
+
+rarity_map load_rarities(string filename)
+{
+    string[int] tile_map;
+    file_to_map(beach_file(filename), tile_map);
+    return tile_map.to_rarity_map();
+}
+
+void save_rarities(rarity_map rarities, string filename)
+{
+    string[int] tile_map = rarities.to_ash_map();
+    map_to_file(tile_map, beach_file(filename + ".txt"));
+    buffer json = rarities.rarity_map_to_json();
+    buffer_to_file(json, beach_file(filename + ".json"));
 }
 
 // ***************************
@@ -855,6 +1020,10 @@ void save_tile_data()
     sort castle_beaches_seen by value;
     save_beaches(castle_beaches_seen, "beaches.castle.seen.json");
 }
+
+// ***************************
+//          Utilities        *
+// ***************************
 
 // For merging newly discovered tiles into known tile lists.
 // This is for publishing updated data files
@@ -1163,4 +1332,16 @@ void prune_tile_data(boolean verbose, boolean save)
     prune_castle_tiles();
     // *** Obsolete: the following can be calculated from the sand castle tiles
     prune_castle_beaches();
+}
+
+// For exporting tile data into new compact format
+
+void import_tiles(boolean verbose)
+{
+}
+
+void export_tiles(boolean verbose)
+{
+    rarity_map rarities = populate_rarity_map();
+    save_rarities(rarities, "tiles.rarities");
 }
