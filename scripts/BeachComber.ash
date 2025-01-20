@@ -179,8 +179,6 @@ void parse_parameters(string... parameters)
 	    // have not yet verified. Stop when we run out.
 	    mode = "spade";
 	    unverified = true;
-	    // *** Is this necessary?
-	    parse_commons = true;
 	    continue;
 
         // Strategies for selecting rare tiles

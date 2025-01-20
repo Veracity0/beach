@@ -12,8 +12,8 @@ import <BeachComberJSON.ash>;
 // that will be data bloat for most users. And, since there are ~95 commons per beach,
 // detecting whether a common is new will require an efficient data structure.
 //
-// It can also track already combed tiles - which will be invaluabe in tracking down previously
-// unknown unommons and rares - but that will depend on tracking commons.
+// It can also track already combed tiles - which will be invaluable in tracking down
+// previously unknown unommons and rares - but that will depend on tracking commons.
 //
 // BeachComber will set this configuration parameter to true if you are spading, and will let
 // the user specify whether or not to track rough and combed sand if it is not spading.
