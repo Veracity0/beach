@@ -261,9 +261,7 @@ beach_spec beach_detail(int minutes)
 	// Inspect each column on this beach
 	for (int column = 0; column < 10; column++) {
 	    string tile;
-	    if (combed_tiles_map.contains_tile(minutes, row, column)) {
-		tile = "combed";
-	    } else if (rare_tiles_map.contains_tile(minutes, row, column)) {
+	    if (rare_tiles_map.contains_tile(minutes, row, column)) {
 		tile = "rare";
 	    } else if (uncommon_tiles_map.contains_tile(minutes, row, column)) {
 		tile = "uncom";
@@ -364,7 +362,7 @@ void describe_beach(int minutes, boolean verbose)
 // ***************************
 
 
-// Since we have no seen every beach with tides=0, only combed tiles are unknown
+// Since we have now seen every beach with tides=0, only combed tiles are unknown
 // This record has the numeric state and a set of beaches which are not fully spaded.
 
 record beach_state
@@ -491,7 +489,6 @@ row_states build_row_data(boolean verbose)
     int heads = 0;
     int castles = 0;
     int combed = 0;
-    int unverified = 0;
 
     // 10,000 beaches each with 100 rows
     // tile_data [int, int] beach_rows;
@@ -505,9 +502,7 @@ row_states build_row_data(boolean verbose)
 	    tile_data tiles;
 	    // Inspect each column on this beach
 	    for (int column = 0; column < 10; column++) {
-		// Tiles that _I_ have only seen as combed.
-		// We assume they are unverified rares
-		// Therefore "unverified" SHOULD equal "combed"
+		// Tiles that are marked as "combed" are rares
 		if (combed_tiles_map.contains_tile(minute, row, column)) {
 		    tiles.combed++;
 		    combed++;
@@ -517,9 +512,6 @@ row_states build_row_data(boolean verbose)
 		    // All combed tiles are also in the rare map
 		    tiles.rares++;
 		    rares++;
-		    if (!verified_tiles_map.contains_tile(minute, row, column)) {
-			unverified++;
-		    }
 		} else if (uncommon_tiles_map.contains_tile(minute, row, column)) {
 		    tiles.uncommons++;
 		    uncommons++;
@@ -543,7 +535,6 @@ row_states build_row_data(boolean verbose)
     if (verbose) {
 	print();
 	print("Total rares = " + rares);
-	print("(Unverified rares = " + unverified + ")");
 	print("Total uncommons = " + uncommons);
 	print("Total commons = " + commons);
 	print("Total beach heads = " + heads);
@@ -684,68 +675,14 @@ beach_set unknown_unrare_beaches(beach_set input)
 }
 
 // ***************************
-//       Combed Tiles        *
-// ***************************
-
-void generate_combed_tiles(boolean save, boolean verbose)
-{
-    void print_tiles(compact_coords_map map)
-    {
-	foreach min, row, col in map {
-	    print("&nbsp;&nbsp;&nbsp;&nbsp;(" + min + "," + row + "," + (col + 1) + ")");
-	}
-    }
-
-    // Since combed tiles are assumed to be unverified rares, all we
-    // really need are rare_tiles_map and verified_tiles_map
-
-    parse_commons = false;
-    load_tile_data(false);
-
-    int original_beaches = combed_tiles_map.count_beaches();
-    int original_tiles = combed_tiles_map.count_tiles();
-
-    compact_coords_map new_combed_tiles_map;
-    new_combed_tiles_map.add_tiles(rare_tiles);
-    new_combed_tiles_map.remove_tiles(rare_tiles_verified);
-
-    int new_beaches = new_combed_tiles_map.count_beaches();
-    int new_tiles = new_combed_tiles_map.count_tiles();
-
-    if (original_tiles != new_tiles) {
-	print("Combed tiles: " + original_tiles + " -> " + new_tiles);
-	print("Combed beaches: " + original_beaches + " -> " + new_beaches);
-
-	if (save) {
-	    save_tiles_map(new_combed_tiles_map, "tiles.combed.json");
-	}
-    } else {
-	print("There " +
-	      (original_tiles == 1 ? "is " : "are ") +
-	      original_tiles +
-	      " combed " +
-	      (original_tiles == 1 ? "tile on " : "tiles on ") +
-	      original_beaches +
-	      (original_beaches == 1 ? " beach." : " beaches."));
-    }
-
-    if (new_tiles > 0 && verbose) {
-	    print_tiles(combed_tiles_map);
-    }
-    
-}
-
-// ***************************
 //      Master Control       *
 // ***************************
 
 void main(string... parameters)
 {
     boolean verbose = false;
-    boolean combed = false;
     boolean complete = false;
     beach minutes = 0;
-    boolean save = false;
 
     void parse_parameters(string... parameters)
     {
@@ -756,13 +693,6 @@ void main(string... parameters)
 		continue;
 	    case "verbose":
 		verbose = true;
-		continue;
-	    case "save":
-		save = true;
-		continue;
-	    case "combed":
-		combed = true;
-		parse_commons = true;
 		continue;
 	    case "complete":
 		complete = true;
@@ -805,11 +735,6 @@ void main(string... parameters)
 
     // Parse parameters
     parse_parameters(params);
-
-    if (combed) {
-	generate_combed_tiles(save, verbose);
-	return;
-    }
 
     if (complete) {
 	analyze_completeness(verbose);
