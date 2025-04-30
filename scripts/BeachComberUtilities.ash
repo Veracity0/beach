@@ -361,7 +361,6 @@ void describe_beach(int minutes, boolean verbose)
 //     Spading Completeness  *
 // ***************************
 
-
 // Since we have now seen every beach with tides=0, only combed tiles are unknown
 // This record has the numeric state and a set of beaches which are not fully spaded.
 
@@ -599,6 +598,147 @@ row_states calculate_tidal_data()
 }
 
 // ***************************
+//       Spading Rarities    *
+// ***************************
+
+void analyze_rarities(boolean verbose)
+{
+    // Load the data
+    load_rare_type_data(verbose);
+
+    // Array of rare types in desired order
+    string[] rare_types = {
+	"driftwood", "pirate", "message", "whale", "meteorite", "pearl"
+    };
+
+    int type_count = count(rare_types);
+
+    // Array of tile_count_maps - key -> count - for each rare type
+    tile_count_map[] tile_maps = {
+	driftwood_tiles.to_tile_count_map(),
+	pirate_tiles.to_tile_count_map(),
+	message_tiles.to_tile_count_map(),
+	whale_tiles.to_tile_count_map(),
+	meteorite_tiles.to_tile_count_map(),
+	pearl_tiles.to_tile_count_map()
+    };
+
+    beach_count_map[] beach_maps = {
+	driftwood_tiles.to_beach_count_map(),
+	pirate_tiles.to_beach_count_map(),
+	message_tiles.to_beach_count_map(),
+	whale_tiles.to_beach_count_map(),
+	meteorite_tiles.to_beach_count_map(),
+	pearl_tiles.to_beach_count_map()
+    };
+    
+    // Arrays of shared tile counts / beaches
+    typedef int[int,int] tile_count_array;
+    tile_count_array tile_counts;
+    tile_count_array beach_counts;
+
+    // Populate array with initial values
+    for (int this = 0; this < type_count; this++) {
+	tile_counts[this, this] = count(tile_maps[this]);
+	beach_counts[this, this] = count(beach_maps[this]);
+    }
+
+    // Count tiles with multiple types
+    for (int row = 0; row < type_count; row++) {
+	tile_count_map row_tile_map = tile_maps[row];
+	beach_count_map row_beach_map = beach_maps[row];
+	for (int col = row + 1; col < type_count; col++) {
+	    tile_count_map col_tile_map = tile_maps[col];
+	    beach_count_map col_beach_map = beach_maps[col];
+	    foreach key in row_tile_map {
+		if (col_tile_map contains key) {
+		    // print("tile row/col (" + row + "," + col + ") shared key " + key);
+		    tile_counts[row, row]--;
+		    tile_counts[col, col]--;
+		    tile_counts[row, col]++;
+		}
+	    }
+	    foreach key in row_beach_map {
+		if (col_beach_map contains key) {
+		    // print("beach row/col (" + row + "," + col + ") shared key " + key);
+		    beach_counts[row, row]--;
+		    beach_counts[col, col]--;
+		    beach_counts[row, col]++;
+		}
+	    }
+	}
+    }
+
+    buffer to_html() {
+	buffer table;
+
+	void add_header() {
+	    table.append("<tr>");
+	    table.append("<th>TYPE</th>");
+	    foreach n, name in rare_types {
+		table.append("<th>");
+		table.append(name);
+		table.append("</th>");
+	    }
+	    table.append("<th>TOTAL</th>");
+	    table.append("</tr>");
+	}
+
+	void add_row(int row) {
+	    table.append("<tr>");
+
+	    table.append("<td>");
+	    table.append(rare_types[row]);
+	    table.append("</td>");
+
+	    int tiles = 0;
+	    int beaches = 0;
+	    for (int col = 0; col < type_count; col++) {
+		table.append("<td>");
+
+		int tile_count = tile_counts[row, col];
+		table.append(tile_count);
+		tiles += tile_count;
+		
+		int beach_count = beach_counts[row, col];
+		table.append(" (");
+		table.append(beach_count);
+		table.append(")");
+		beaches += beach_count;
+
+		table.append("</td>");
+	    }
+
+	    table.append("<td>");
+	    table.append(tiles);
+	    table.append(" (");
+	    table.append(beaches);
+	    table.append(")");
+	    table.append("</td>");
+
+	    table.append("</tr>");
+	}
+
+	table.append("<html>");
+	table.append("<table border=1>");
+
+	add_header();
+
+	for (int row = 0; row < type_count; row++) {
+	    add_row(row);
+	}
+
+	table.append("</table>");
+	table.append("</html>");
+
+	return table;
+    }
+
+    print();
+    print_html(to_html());
+}
+
+// ***************************
 //    Beach Set utilities    *
 // ***************************
 
@@ -682,6 +822,7 @@ void main(string... parameters)
 {
     boolean verbose = false;
     boolean complete = false;
+    boolean rarities = false;
     beach minutes = 0;
 
     void parse_parameters(string... parameters)
@@ -697,6 +838,9 @@ void main(string... parameters)
 	    case "complete":
 		complete = true;
 		parse_commons = true;
+		continue;
+	    case "rarities":
+		rarities = true;
 		continue;
 	    }
 
@@ -738,6 +882,11 @@ void main(string... parameters)
 
     if (complete) {
 	analyze_completeness(verbose);
+	return;
+    }
+
+    if (rarities) {
+	analyze_rarities(verbose);
 	return;
     }
 

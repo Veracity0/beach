@@ -138,6 +138,9 @@ void parse_parameters(string... parameters)
 	case "data":
 	    mode = "data";
 	    continue;
+	case "rarities":
+	    mode = "rarities";
+	    continue;
 	case "reset":
 	    mode = "reset";
 	    continue;
@@ -378,10 +381,33 @@ sorted_beach_map sort_beach()
     return sort_beach( get_minutes(), get_beach_layout() );
 }
 
-void save_visited_tile(coords tile, string tile_type) {
+void save_visited_tile(coords tile, string tile_type, rare_type tile_rarity) {
     // If our tile was "combed sand", we couldn't categorize it
     if (tile_type == "unknown") {
 	return;
+    }
+
+    if (tile_type == "rare") {
+	switch (tile_rarity) {
+	case RARE_DRIFTWOOD:
+	    driftwood_tiles.add_tile(tile);
+	    break;
+	case RARE_PIRATE:
+	    pirate_tiles.add_tile(tile);
+	    break;
+	case RARE_MESSAGE:
+	    message_tiles.add_tile(tile);
+	    break;
+	case RARE_WHALE:
+	    whale_tiles.add_tile(tile);
+	    break;
+	case RARE_METEORITE:
+	    meteorite_tiles.add_tile(tile);
+	    break;
+	case RARE_PEARL:
+	    pearl_tiles.add_tile(tile);
+	    break;
+	}
     }
 
     // If we previously saw this as "combed", it no longer is.
@@ -799,6 +825,7 @@ void put_away_comb()
 
 int [string] combed_rarities;
 int [string] combed_types;
+int [rare_type] combed_rare_types;
 int combed_meat;
 int [item] combed_items;
 string [int] beachcombings;
@@ -925,6 +952,7 @@ buffer comb_beach( buffer page )
     boolean special = false;
 
     string tile_type = "unknown";
+    rare_type tile_rarity = NOT_RARE;
 
     // Look for beached whales
     if ( page.contains_text( "whale.png" ) ) {
@@ -932,6 +960,7 @@ buffer comb_beach( buffer page )
 	// Worth noting, but we also want to learn the hover text
 	special = true;
 	tile_type = "rare";
+	tile_rarity = RARE_WHALE;
     }
 
     // Look for unknown square types
@@ -974,9 +1003,10 @@ buffer comb_beach( buffer page )
     // Look for rainbow pearls
     if ( page.contains_text( "rainbow pearl" ) ) {
 	print( "You found a rainbow pearl!", "red" );
-	// Let's see the the result text
+	// Let's save the the result text
 	special = true;
 	tile_type = "rare";
+	tile_rarity = RARE_PEARL;
 	// If we are pearl diving, we can stop now.
 	if (mode == "pearl") {
 	    available_tiles.clear();
@@ -987,9 +1017,10 @@ buffer comb_beach( buffer page )
     // Look for meteorite fragments
     if ( page.contains_text( "meteorite fragment" ) ) {
 	print( "You found a meteorite fragment!", "red" );
-	// Let's see the the result text
+	// Let's save the the result text
 	special = true;
 	tile_type = "rare";
+	tile_rarity = RARE_METEORITE;
     }
 
     // Look for cursed pirate stuff
@@ -997,17 +1028,22 @@ buffer comb_beach( buffer page )
 	 page.contains_text( "cursed tricorn hat" ) ||
 	 page.contains_text( "cursed swash buckle" ) ) {
 	print( "You found a cursed pirate hoard!", "red" );
-	// Let's see the the result text
+	// Let's save the the result text
 	special = true;
 	tile_type = "rare";
+	tile_rarity = RARE_PIRATE;
     }
 
     // Look for messages in bottles
     if ( page.contains_text( "like it contains some sort of message" ) ) {
-	print( "You found a message in a bottle!", "red" );
-	// Let's see the the result text and learn how to parse out the message.
-	special = true;
 	tile_type = "rare";
+	tile_rarity = RARE_MESSAGE;
+    }
+
+    // Look for piece of driftwood
+    if ( page.contains_text( "piece of driftwood" ) ) {
+	tile_type = "rare";
+	tile_rarity = RARE_DRIFTWOOD;
     }
 
     int meat = page.extract_meat();
@@ -1018,18 +1054,20 @@ buffer comb_beach( buffer page )
 	tile_type = categorize_tile(items);
     }
 
-    print( c + " is a" + (tile_type == "uncommon" ? "n" : "") + " '" + tile_type + "' tile.");
+    save_visited_tile(c, tile_type, tile_rarity);
 
-    save_visited_tile(c, tile_type);
+    print( c + " is a" + (tile_type == "uncommon" ? "n" : "") + " '" + tile_type + "' tile.");
 
     // Accumulate findings
 
     combed_rarities[ tile_type ]++;
     combed_types[ type ]++;
+    combed_rare_types[ tile_rarity ]++;
     combed_meat += meat;
     foreach it, count in items {
 	combed_items[ it ] += count;
     }
+
 
     if ( special ) {
 	save_page_html( c );
@@ -1279,6 +1317,13 @@ void main(string... parameters )
 	exit;
     }
 
+    // If user only wants to see the rarities data, load the data verbosely
+    // (which will print info) and then exit.
+    if (mode == "rarities") {
+	load_rare_type_data(true);
+	exit;
+    }
+
     // Clears "combed" tile data. "pearl" mode will notice this and set
     // "combed" data to include all rares.
     if (mode == "reset") {
@@ -1327,6 +1372,9 @@ void main(string... parameters )
     if (!load_tile_data(true)) {
 	abort("Unable to load tile data");
     }
+    if (!load_rare_type_data(true)) {
+	abort("Unable to load rare type data");
+    }
 
     // If the user wants to comb rare tiles, set up helpful data structures
     if (mode == "rare" || mode == "pearl") {
@@ -1350,6 +1398,7 @@ void main(string... parameters )
 	print();
 	print("Saving new tile data...");
 	save_tile_data();
+	save_rare_type_data();
 
 	print();
 	foreach type in $strings[common, uncommon, rare, unknown] {
@@ -1359,6 +1408,13 @@ void main(string... parameters )
 	print();
 	foreach type, count in combed_types {
 	    print( "Combed " + type + " " + count + " times." );
+	}
+
+	if ( count(combed_rare_types) > 0 ) {
+	    print();
+	    foreach type, count in combed_rare_types {
+		print( "Combed " + type + " " + count + " times." );
+	    }
 	}
 
 	print();

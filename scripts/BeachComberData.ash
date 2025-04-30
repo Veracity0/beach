@@ -276,7 +276,7 @@ coords to_coords( int key )
 // A map from hash key -> tile.
 //
 // Essentially, this is a set of tiles; since the coords can be derived
-// from the has key, we don't REALLY need to store the actual tile.
+// from the hash key, we don't REALLY need to store the actual tile.
 
 typedef coords[int] coords_list;
 
@@ -575,14 +575,90 @@ compact_coords_map all_common_tiles_map;
 beach_set castle_beach_set;
 
 // ***************************
+//         Rare Types        *
+// ***************************
+
+// If only ASH had enums...
+
+// Cannot be "item", since "pirate" is any of 3 items, "whale" is Meat,
+// and "message" is neither.
+typedef string rare_type;
+
+static rare_type NOT_RARE = "not rare";
+static rare_type RARE_DRIFTWOOD = "piece of driftwood";
+static rare_type RARE_PIRATE = "cursed pirate hoard";
+static rare_type RARE_MESSAGE = "message in a bottle";
+static rare_type RARE_WHALE = "beached whale";
+static rare_type RARE_METEORITE = "meteorite fragment";
+static rare_type RARE_PEARL = "rainbow pearl";
+
+// A map from index -> tile.
+//
+// Unlike a coords_list, which indexes from hash key to tile, this allows duplicates
+
+typedef coords[int] tile_list;
+
+tile_list driftwood_tiles;	// tiles.rare.driftwood.json
+tile_list pirate_tiles;		// tiles.rare.pirate.json
+tile_list message_tiles;	// tiles.rare.message.json
+tile_list whale_tiles;		// tiles.rare.whale.json
+tile_list meteorite_tiles;	// tiles.rare.meteorite.json
+tile_list pearl_tiles;		// tiles.rare.pearl.json
+
+void add_tile(tile_list list, coords tile)
+{
+    list[count(list)] = tile;
+}
+
+typedef int[int] tile_count_map;
+
+tile_count_map to_tile_count_map(tile_list list)
+{
+    tile_count_map result;
+    foreach n, tile in list {
+	result[tile.to_key()]++;
+    }
+    return result;
+}
+
+int tile_count(tile_count_map map)
+{
+    int total = 0;
+    foreach key, count in map {
+	total += count;
+    }
+    return total;
+}
+
+typedef int[int] beach_count_map;
+
+beach_count_map to_beach_count_map(tile_list list)
+{
+    beach_count_map result;
+    foreach n, tile in list {
+	result[tile.minute]++;
+    }
+    return result;
+}
+
+int beach_count(beach_count_map map)
+{
+    int total = 0;
+    foreach key, count in map {
+	total += count;
+    }
+    return total;
+}
+
+// ***************************
 //         Rarity Map        *
 // ***************************
 
 // A map from (int) key -> (string) rarity
 
+// If only ASH had enums...
 typedef string rarity;
 
-// If only ASH had enums...
 static rarity TILE_COMMON = "common";
 static rarity TILE_UNCOMMON = "uncommon";
 static rarity TILE_RARE = "rare";
@@ -748,6 +824,17 @@ coords_list json_to_coords_list( buffer json )
     return result;
 }
 
+tile_list json_to_tile_list( buffer json )
+{
+    tile_list result;
+    json_array array = parse_json_array(json);
+    foreach n, value in array {
+	coords coords = json_to_coords(value);
+	result.add_tile(coords);
+    }
+    return result;
+}
+
 compact_coords_map json_to_compact_coords_map( buffer json )
 {
     compact_coords_map result;
@@ -760,6 +847,21 @@ compact_coords_map json_to_compact_coords_map( buffer json )
 }
 
 buffer coords_list_to_json( coords_list list )
+{
+    buffer buf = "[";
+    int count = 0;
+    foreach key, c in list {
+	if (count++ > 0) {
+	    buf.append(",");
+	}
+	buf.append("\n  ");
+	buf.append(coords_to_json(c));
+    }
+    buf.append("\n]\n");
+    return buf;
+}
+
+buffer tile_list_to_json( tile_list list )
 {
     buffer buf = "[";
     int count = 0;
@@ -817,6 +919,16 @@ coords_list load_tiles(string filename)
 void save_tiles(coords_list data, string filename)
 {
     data.coords_list_to_json().buffer_to_file(beach_file(filename));
+}
+
+tile_list load_tile_list(string filename)
+{
+    return file_to_buffer(beach_file(filename)).json_to_tile_list();
+}
+
+void save_tile_list(tile_list data, string filename)
+{
+    data.tile_list_to_json().buffer_to_file(beach_file(filename));
 }
 
 compact_coords_map load_tiles_map(string filename)
@@ -918,10 +1030,49 @@ boolean load_tile_data(boolean verbose)
     return true;
 }
 
-
 void save_tile_data()
 {
     save_tiles(combed_tiles, "tiles.combed.json");
+}
+
+boolean load_rare_type_data(boolean verbose)
+{
+    driftwood_tiles = load_tile_list("tiles.rare.driftwood.json");
+    pirate_tiles = load_tile_list("tiles.rare.pirate.json");
+    message_tiles = load_tile_list("tiles.rare.message.json");
+    whale_tiles = load_tile_list("tiles.rare.whale.json");
+    meteorite_tiles = load_tile_list("tiles.rare.meteorite.json");
+    pearl_tiles = load_tile_list("tiles.rare.pearl.json");
+    if (verbose) {
+	void print_list_counts(string name, tile_list list)
+	{
+	    int count = count(list);
+	    int tcount = count(list.to_tile_count_map());
+	    int bcount = count(list.to_beach_count_map());
+	    print(name + count + " (" + tcount + " tiles, " + bcount + " beaches)");
+	}
+
+	print();
+	print_list_counts("Driftwood: ", driftwood_tiles);
+	print_list_counts("Pirate hoards: ", pirate_tiles);
+	print_list_counts("Message bottles: ", message_tiles);
+	print_list_counts("Whales: ", whale_tiles);
+	print_list_counts("Meteorite fragments: ", meteorite_tiles);
+	print_list_counts("Rainbow pearls: ", pearl_tiles);
+
+    }
+
+    return true;
+}
+
+void save_rare_type_data()
+{
+    save_tile_list(driftwood_tiles, "tiles.rare.driftwood.json");
+    save_tile_list(pirate_tiles, "tiles.rare.pirate.json");
+    save_tile_list(message_tiles, "tiles.rare.message.json");
+    save_tile_list(whale_tiles, "tiles.rare.whale.json");
+    save_tile_list(meteorite_tiles, "tiles.rare.meteorite.json");
+    save_tile_list(pearl_tiles, "tiles.rare.pearl.json");
 }
 
 // ***************************
