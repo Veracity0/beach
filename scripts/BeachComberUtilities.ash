@@ -656,6 +656,7 @@ void analyze_rarities(boolean verbose)
 		    tile_counts[row, row]--;
 		    tile_counts[col, col]--;
 		    tile_counts[row, col]++;
+		    tile_counts[col, row]++;
 		}
 	    }
 	    foreach key in row_beach_map {
@@ -664,6 +665,7 @@ void analyze_rarities(boolean verbose)
 		    beach_counts[row, row]--;
 		    beach_counts[col, col]--;
 		    beach_counts[row, col]++;
+		    beach_counts[col, row]++;
 		}
 	    }
 	}
