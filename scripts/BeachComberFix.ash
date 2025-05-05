@@ -2,15 +2,6 @@ since r27551;
 
 import <BeachComberData.ash>
 
-compact_coords_map common;
-coords_list uncommon;
-coords_list rare;
-coords_list unknown;
-
-// Beaches can contain multiple castles, but unique beaches matter,
-// not the coordinates of individual beach tiles
-beach_set castle;
-
 // This is what combing with combo looks like:
 
 /*
@@ -71,7 +62,7 @@ You acquire porquoise (5)
 You gain 205,406 Meat
 > You found a cursed pirate hoard!
 > (5540,9,5) is a 'rare' tile.
-> Saving page HTML to Veracity_beachcombings_20230819055519801.txt
+> Saving page HTML to Veracity_5540_9_5_20230819055519801.txt
 */
 
 /*
@@ -89,7 +80,6 @@ Combing square 8,2 (1163 minutes down the beach)
 > Saving page HTML to Chondara_1163_8_2_20240415100059439.html
 */
 
-
 typedef matcher combing_matcher;
 
 combing_matcher create_combing_matcher(string data)
@@ -104,8 +94,12 @@ coords extract_tile(combing_matcher m) {
     return new coords(minutes, row, column - 1);
 }
 
+string extract_acquisition(combing_matcher m) {
+    return m.group(4);
+}
+
 rare_type extract_rarity(combing_matcher m) {
-    string acquisition = m.group(4);
+    string acquisition = m.extract_acquisition();
 
     if ( acquisition.contains_text("piece of driftwood")) {
 	return RARE_DRIFTWOOD;
@@ -145,19 +139,15 @@ tile_list[rare_type] tile_rarities;
 
 void process_rares(string data)
 {
-    void process_rare_combings()
-    {
-	combing_matcher m = create_combing_matcher(data);
-	while (m.find()) {
-	    rare_type tile_rarity = m.extract_rarity();
-	    if (tile_rarity != NOT_RARE) {
-		coords tile = m.extract_tile();
-		tile_rarities[tile_rarity].add_tile(tile);
-		rares_seen++;
-	    }
+    combing_matcher m = create_combing_matcher(data);
+    while (m.find()) {
+	rare_type tile_rarity = m.extract_rarity();
+	if (tile_rarity != NOT_RARE) {
+	    coords tile = m.extract_tile();
+	    tile_rarities[tile_rarity].add_tile(tile);
+	    rares_seen++;
 	}
     }
-    process_rare_combings();
 }
 
 void print_tile_rarities()
@@ -180,138 +170,8 @@ void save_tile_rarities()
     save_rare_type_data();
 }
 
-void process_beach_entry(string log_date, string data)
-{
-    if (data.length() == 0) {
-	return;
-    }
-
-    // Count the beaches we visited in this log
-    beach_set visited_beaches;
-    // Count tiles that we find on each beach
-    int commons, uncommons, rares, unknowns, castles, total;
-
-    void process_types()
-    {
-	// (7902,7,10) is an 'uncommon' tile.
-	matcher m = create_matcher("\\((\\d+),(\\d+),(\\d+)\\) is an? '(.*?)' tile", data);
-	while (m.find()) {
-	    int minutes = m.group(1).to_int();
-	    int row = m.group(2).to_int();
-	    int column = m.group(3).to_int();
-	    string type = m.group(4);
-	    coords tile = new coords(minutes, row, column-1);
-	    switch (type) {
-	    case "common":
-		common.add_tile(tile);
-		commons++;
-		break;
-	    case "uncommon":
-		uncommon.add_tile(tile);
-		uncommons++;
-		break;
-	    case "rare":
-		rare.add_tile(tile);
-		rares++;
-		break;
-	    case "unknown":
-		unknown.add_tile(tile);
-		unknowns++;
-		break;
-	    default:
-		print(m.group(0));
-		break;
-	    }
-	    total++;
-	}
-    }
-
-    void process_castles()
-    {
-	// > 2 squares in beach 7149 contain a sand castle
-	matcher m = create_matcher("(\\d+) squares? in beach (\\d+) contain a sand castle", data);
-	while (m.find()) {
-	    int count =  m.group(1).to_int();
-	    int minutes = m.group(2).to_int();
-	    castle.add_beach(minutes);
-	    castles += count;
-	}
-    }
-
-    process_types();
-    process_castles();
-
-    if (total > 0) {
-	print(log_date + " Tiles: " +
-	      commons + " common " +
-	      uncommons + " uncommon " +
-	      rares + " rare " +
-	      unknowns + " unknown." +
-	      " total = " + total);
-    }
-    if (count(castle) > 0) {
-	print(log_date + " Castles: " +
-	      count(castle) + " unique beaches contain " +
-	      castles + " sand castles.");
-    }
-}
-
-void print_new_data()
-{
-    print();
-    print("Tiles processed");
-    print();
-    print("common: " + common.count_tiles());
-    print("uncommon: " + count(uncommon));
-    print("rare: " + count(rare));
-    print("unknown: " + count(unknown));
-    print("sand castles: " + count(castle));
-}
-
-void print_castle_beaches()
-{
-    // castle is the beach_set of castles we saw
-    // Make a beach_list from it.
-    beach_list seen_castle_beaches = castle;
-
-    // castle_beaches_wiki is the beach_set of derived beaches
-    // Make a beach_list from it.
-    beach_list derived_castle_beaches = castle_beaches_wiki;
-
-    // Make a new beach_set from the derived castles
-    beach_set missing_castle_beaches = derived_castle_beaches;
-    
-    // Remove the seen castles
-    remove_beaches(missing_castle_beaches, seen_castle_beaches);
-
-    // Statistics
-    int seen_castle_count = count(castle);
-    int derived_castle_count = count(castle_beaches_wiki);
-    int missing_castle_count = count(missing_castle_beaches);
-
-    print();
-    if (missing_castle_count == 0) {
-	print("We have have seen all " + derived_castle_count + " beaches with sand castles.");
-	return;
-    }
-	
-    print("We have not seen the following " + missing_castle_count + " beaches with sand castles:");
-    foreach b in missing_castle_beaches {
-	print("&nbsp;&nbsp;&nbsp;&nbsp;"+ b);
-    }
-}
-
-void print_tile_summary(string header)
-{
-    print();
-    print(header);
-    print();
-    print("rare tiles: " + count(rare_tiles));
-    print("uncommon_tiles: " + count(uncommon_tiles));
-    print("common_tiles: " + common_tiles_map.count_tiles());
-}
-
 // The Beach Comb Box was the IOTM for July 2019
+
 // I modernized request logging on Dex 28, 2019 
 string earliest_date = "20191229";
 
@@ -321,6 +181,7 @@ string modern_date = "20230815";
 string[int] players;
 string date = earliest_date;
 string player = "";
+boolean verbose = false;
 boolean rarities = false;
 boolean save = false;
 
@@ -334,7 +195,8 @@ void print_help()
     print(spaces + "(if omitted, take players from beach/players.txt)");
     print(spaces + "(if empty, use current player, if logged in)");
     print(spaces + "rarities - scrape rare tiles combed.");
-    print(spaces + "save - after scraping tiles and pruning, save results.");
+    print(spaces + "verbose - verbose logging, as appropriate.");
+    print(spaces + "save - after scraping tiles, save results.");
 }
 
 string parse_parameters(string... parameters)
@@ -404,6 +266,9 @@ string parse_parameters(string... parameters)
 	case "help":
 	    print_help();
 	    exit;
+	case "verbose":
+	    verbose = true;
+	    continue;
 	case "rare":
 	    rarities = true;
 	    continue;
@@ -459,20 +324,16 @@ void main(string... parameters)
     // configuration, since parameters can override properties.
     parse_parameters(params);
 
-    // Load existing data
-    if (!rarities) {
-	load_tile_data(false);
-	print_tile_summary("Initial tile data");
-	print();
-	return;
-    }
+    int total_logs;
 
     foreach n, name in players {
-	print("Processing logs for " + name);
+	print("Processing logs for " + name + "...");
 	int now = now_to_int();
 	int current = date_to_timestamp("yyyyMMdd", date);
 	int millis = 24 * 60 * 60 * 1000;
 	int tomorrow = now + millis;
+
+	int player_logs = 0;
 
 	while (current < tomorrow) {
 	    string log_date = timestamp_to_date(current, "yyyyMMdd");
@@ -480,16 +341,35 @@ void main(string... parameters)
 
 	    // Process each log
 	    foreach n, log in logs {
+		// Combing square 2,2 (7307 minutes down the beach)
+		// Preference _freeBeachWalksUsed changed from 2 to 3
+		// You acquire an item: driftwood bracelet
+
+		matcher pref_matcher = create_matcher("Preference .*?\n", log);
+		log = pref_matcher.replace_all("");
+
 		// Process the data in it
 		if (rarities) {
 		    process_rares(log);
-		} else {
-		    process_beach_entry(log_date, log);
 		}
+
+		player_logs++;
 	    }
 	    current += millis;
 	}
+
+	if (verbose) {
+	    print(player_logs + " processed for " + name);
+	}
+
+	total_logs += player_logs;
     }
+
+    if (verbose & count(players) > 1) {
+	print(total_logs + " total logs processed");
+    }
+
+    print("Done!");
 
     if (rarities) {
 	print_tile_rarities();
@@ -498,10 +378,4 @@ void main(string... parameters)
 	}
 	return;
     }
-
-    // Report on what we scraped
-    print_new_data();
-
-    // Report on castles we saw
-    print_castle_beaches();
 }
