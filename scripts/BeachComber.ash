@@ -141,6 +141,9 @@ void parse_parameters(string... parameters)
 	case "rarities":
 	    mode = "rarities";
 	    continue;
+	case "tides":
+	    mode = "tides";
+	    continue;
 	case "reset":
 	    mode = "reset";
 	    continue;
@@ -228,17 +231,11 @@ void parse_parameters(string... parameters)
 // you visit it.
 //
 // _beachMinutes        int
-// _beachTides          int
 // _beachLayout         ROW:LAYOUT[,...]
 
 int get_minutes()
 {
     return get_property( "_beachMinutes" ).to_int();
-}
-
-int get_tides()
-{
-    return get_property( "_beachTides" ).to_int();
 }
 
 string get_layout()
@@ -506,7 +503,7 @@ string categorize_tile(int[item] items)
 int current_beach = 0;
 
 // The tides can cover from 0-4 rows of tiles.
-// The Wiki says there is an eight-day cycle:
+// There is an eight-day cycle:
 // 0, 1, 2, 3, 4, 3, 2, 1, 0 ...
 //
 // row 1: available 1 day out of eight (tides = 0)
@@ -515,7 +512,7 @@ int current_beach = 0;
 // row 4: available 7 days out of eight (tides = 0-3)
 // row 5-10: available every day
 
-int current_tides = -1;
+tides current_tides = current_tides();
 
 // If we are in "rare" mode, we want to look for rares.
 // We need more data structures to enable that.
@@ -572,37 +569,33 @@ void prepare_tiles(boolean verbose)
     // and recreate the list every time we comb one - that will suffice.
 }
 
-boolean check_tides(boolean verbose)
+void check_tides(boolean verbose)
 {
     // Return true if we filtered out wave-washed tiles
-    int tides = get_tides();
-    if (tides >= 0 && current_tides != tides) {
-	int covered = 0;
-	int kept = 0;
-	// If tides are from 1-4, all those rows are unavailable.
-	int wettest = tides + 1;
-	foreach key, coords in available_tiles {
-	    if (coords.row < wettest) {
-		covered++;
-		remove available_tiles[key];
-	    } else {
-		kept++;
-	    }
-	}
+    int level = current_tides.covered;
 
-	if (verbose) {
-	    if (covered > 0) {
-		print(covered + " rare tiles are washed by the waves");
-	    }
-	    if (kept > 0) {
-		print(kept + " rare tiles are candidates for combing");
-	    }
-	}
+    int covered = 0;
+    int kept = 0;
 
-	current_tides = tides;
-	return covered > 0;
+    // If tides are from 1-4, all those rows are unavailable.
+    int wettest = level + 1;
+    foreach key, coords in available_tiles {
+	if (coords.row < wettest) {
+	    covered++;
+	    remove available_tiles[key];
+	} else {
+	    kept++;
+	}
     }
-    return false;
+
+    if (verbose) {
+	if (covered > 0) {
+	    print(covered + " rare tiles are washed by the waves");
+	}
+	if (kept > 0) {
+	    print(kept + " rare tiles are candidates for combing");
+	}
+    }
 }
 
 boolean filter_tiles(boolean verbose)
@@ -622,21 +615,13 @@ boolean filter_tiles(boolean verbose)
 	    return false;
 	}
 
-	int tides = get_tides();
-
-	// Until we know what the tides are, we cannot filter on them
-	if (tides < 0) {
+	// If the tides came in today, nothing new was revealed.
+	if (current_tides.direction == "in") {
 	    return false;
 	}
 
 	// If tides are from 1-4, those rows are unavailable.
-	int wettest = tides + 1;
-
-	// If the tides are at their highest, we don't care about tides
-	// Since nothing new was revealed today.
-	if (wettest > 4) {
-	    return false;
-	}
+	int wettest = current_tides.covered + 1;
 
 	int covered = 0;
 	int dry = 0;
@@ -926,12 +911,6 @@ buffer comb_beach( buffer page )
     beach_layout layout = get_beach_layout();
     sorted_beach_map map = sort_beach( minutes, layout );
 
-    // Now that we have the beach map, see how many rows are covered by waves
-    if ((mode == "rare" || mode == "pearl") && check_tides(true)) {
-	// Now that we know the tides, refilter available rare tiles
-	filter_tiles(true);
-    }
-
     // Inspect the layout and find all squares with twinkles.
     // (Or a whale)
     coords_list twinkles;
@@ -1172,13 +1151,14 @@ buffer comb_next_beach(int minutes)
 int beach_comb_free( buffer page )
 {
     int beaches_combed = 0;
-    int next_beach = pick_next_beach();
     while ( !completed &&
 	    ( page.contains_text( "free walks down the beach" ) ||
 	      page.contains_text( "1 free walk down the beach" ) ) ) {
-	page = comb_next_beach(next_beach);
-	beaches_combed++;
-	next_beach = pick_next_beach();
+	int next_beach = pick_next_beach();
+	if (!completed) {
+	    page = comb_next_beach(next_beach);
+	    beaches_combed++;
+	}
     }
     return beaches_combed;
 }
@@ -1186,11 +1166,12 @@ int beach_comb_free( buffer page )
 int beach_comb_turns( buffer page, int turns )
 {
     int beaches_combed = 0;
-    int next_beach = pick_next_beach();
     while ( !completed && my_adventures() > 0 && turns-- > 0 ) {
-	page = comb_next_beach(next_beach);
-	beaches_combed++;
-	next_beach = pick_next_beach();
+	int next_beach = pick_next_beach();
+	if (!completed) {
+	    page = comb_next_beach(next_beach);
+	    beaches_combed++;
+	}
     }
     return beaches_combed;
 }
@@ -1324,6 +1305,13 @@ void main(string... parameters )
 	exit;
     }
 
+    // If user wants to see the state of the tides, print it and exit.
+    if (mode == "tides") {
+	string verb = current_tides.direction == "in" ? "came in" : "went out";
+	print("The tides " + verb + " today and " + current_tides.covered + " rows of the beach are now washed by waves.");
+	exit;
+    }
+
     // Clears "combed" tile data. "pearl" mode will notice this and set
     // "combed" data to include all rares.
     if (mode == "reset") {
@@ -1420,7 +1408,7 @@ void main(string... parameters )
 	print();
 	if ( combed_meat > 0 ) {
 	    print();
-	    print( "Meat combed:" + pnum( combed_meat ) );
+	    print( "Meat combed: " + pnum( combed_meat ) );
 	}
 
 	print( "Items combed:" );
