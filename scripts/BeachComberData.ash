@@ -174,9 +174,6 @@ beach_list json_to_beach_list( buffer json )
 //  2  x  x  x  x  x  x  x  x  x  x
 // (1) wave washed squares
 //
-// Tides are cyclical and have an 8-day cycle:
-// 0, 1, 2, 3, 4, 3, 2, 1, ...
-//
 // Coordinates: <row>,(<minute>*10-<column>)
 //
 // That "coordinates" string appears in the choice command you submit to
@@ -194,6 +191,52 @@ record coords
 string to_string( coords c )
 {
     return "(" + c.minute + "," + c.row + "," + ( c.column + 1 ) + ")";
+}
+
+// ***************************
+//            Tides          *
+// ***************************
+//
+// Tides are cyclical and have an 8-day cycle:
+// (out) 0 (in) 1 (in) 2 (in) 3 (in) 4 (out) 3 (out) 2 (out) 1 ...
+//
+// Which is to say, when the tide goes out, the next lower row is revealed,
+// and when it comes in, the lowest row is covered up.
+//
+// The daycount() function is the number of rollovers since KoL since KoL came online.
+// It is shared by everybody - as is the state of tides on the beach.
+// Therefore, it can be used
+//
+// daycount mod 8 covered direction
+// -------- ----- ------- ---------
+//   8119     7      1       in
+//   8120     0      2       in
+//   8121     1      3       in
+//   8122     2      4       in
+//   8123     3      3       out
+//   8124     4      2       out
+//   8125     5      1       out
+//   8126     6      0       out
+
+record tides
+{
+    int covered;	// How many rows are covered
+    string direction;	// "in" or "out"
+};
+
+tides current_tides(int daycount)
+{
+    int mod = daycount % 8;
+
+    string direction = ( mod >= 3 && mod <= 6) ? "out" : "in";
+    int covered = ( mod >= 3 && mod <= 6) ? 6 - mod : (mod + 2) % 8;
+
+    return new tides(covered, direction);
+}
+
+tides current_tides()
+{
+    return current_tides(daycount());
 }
 
 // ***************************

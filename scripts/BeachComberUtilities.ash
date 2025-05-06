@@ -741,6 +741,54 @@ void analyze_rarities(boolean verbose)
 }
 
 // ***************************
+//          Tide Chart       *
+// ***************************
+
+void print_tide_chart()
+{
+    int daycount = daycount();
+    int date = now_to_int();
+    int millis = 24 * 60 * 60 * 1000;
+
+    buffer table;
+
+    table.append("<html>");
+    table.append("<table border=1>");
+
+    table.append("<tr>");
+    table.append("<th>Date</th>");
+    table.append("<th>Direction</th>");
+    table.append("<th>Covered</th>");
+    table.append("</tr>");
+
+    for (int i = 0; i < 8; i++) {
+	string current_date = timestamp_to_date(date, "yyyyMMdd");
+	tides current_tides = current_tides(daycount);
+
+	table.append("<tr>");
+	table.append("<td>");
+	table.append(current_date);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(current_tides.direction);
+	table.append("</td>");
+	table.append("<td>");
+	table.append(current_tides.covered);
+	table.append("</td>");
+	table.append("</tr>");
+
+	date += millis;
+	daycount++;
+   }
+
+    table.append("</table>");
+    table.append("</html>");
+
+    print();
+    print_html(table);
+}
+
+// ***************************
 //    Beach Set utilities    *
 // ***************************
 
@@ -825,6 +873,7 @@ void main(string... parameters)
     boolean verbose = false;
     boolean complete = false;
     boolean rarities = false;
+    boolean tide_chart = false;
     beach minutes = 0;
 
     void parse_parameters(string... parameters)
@@ -843,6 +892,9 @@ void main(string... parameters)
 		continue;
 	    case "rarities":
 		rarities = true;
+		continue;
+	    case "tides":
+		tide_chart = true;
 		continue;
 	    }
 
@@ -889,6 +941,11 @@ void main(string... parameters)
 
     if (rarities) {
 	analyze_rarities(verbose);
+	return;
+    }
+
+    if (tide_chart) {
+	print_tide_chart();
 	return;
     }
 
